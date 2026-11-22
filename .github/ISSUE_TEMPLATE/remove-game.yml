@@ -1,0 +1,38 @@
+name: 🗑 ゲームの削除を依頼する
+description: 掲載中のゲームの削除を依頼します（作者ご本人の依頼は自動で削除されます）
+title: "[削除依頼] "
+labels: ["remove-request"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## 削除依頼フォーム
+        - **作者ご本人**（登録したときと同じ GitHub アカウント）からの依頼は、送信すると自動で削除されます。
+        - それ以外の方からの依頼（権利侵害・不適切な内容の報告など）は、管理者が確認してから対応します。
+
+  - type: input
+    id: game_id
+    attributes:
+      label: ゲームID
+      description: サイトのゲーム詳細にある「削除を依頼」から開くと自動で入ります
+      placeholder: my-awesome-game
+    validations:
+      required: true
+
+  - type: dropdown
+    id: reason
+    attributes:
+      label: 削除理由
+      options:
+        - 作者として掲載を取り下げたい
+        - 権利侵害の報告
+        - 不適切な内容・動作の報告
+        - その他
+    validations:
+      required: true
+
+  - type: textarea
+    id: detail
+    attributes:
+      label: 詳細
+      description: 作者ご本人以外の場合は、具体的な理由を書いてください

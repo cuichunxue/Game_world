@@ -23,6 +23,7 @@
       <span class="logo-text">GAME<b>WORLD</b></span>
     </a>
     <nav class="nav" aria-label="メイン">
+      <a href="#ranking">ランキング</a>
       <a href="#games">ゲーム</a>
       <a href="#creators">クリエイター</a>
       <a href="#submit" class="nav-cta">＋ 登録</a>
@@ -47,10 +48,21 @@
         <dl class="stats">
           <div><dt>ゲーム</dt><dd id="statGames">0</dd></div>
           <div><dt>クリエイター</dt><dd id="statCreators">0</dd></div>
-          <div><dt>ジャンル</dt><dd id="statGenres">0</dd></div>
+          <div><dt>総プレイ数</dt><dd id="statPlays">–</dd></div>
         </dl>
       </div>
       <div class="hero-pick" id="pick" aria-live="polite"></div>
+    </div>
+  </section>
+
+  <!-- RANKING -->
+  <section class="section rank-sec" id="ranking">
+    <div class="wrap">
+      <div class="sec-head">
+        <h2><span class="tag-num">🏆</span>人気ランキング</h2>
+        <p class="sec-sub">「遊ぶ」が押された回数（累計）。同じ端末からは6時間に1回だけ数えます。</p>
+      </div>
+      <ol class="ranking" id="rankList" aria-live="polite"></ol>
     </div>
   </section>
 
@@ -72,6 +84,7 @@
             <span class="sr">並び替え</span>
             <select id="sort">
               <option value="new">新着順</option>
+              <option value="popular">人気順</option>
               <option value="old">古い順</option>
               <option value="name">名前順</option>
               <option value="short">短い順</option>
@@ -237,7 +250,7 @@
         </details>
         <details>
           <summary>公開後に更新や削除はできますか？</summary>
-          <p>現在は管理者が対応します。登録時の Issue にコメントするか、新しい Issue で「更新したい／削除したい」とゲームID を添えてお知らせください。</p>
+          <p><b>削除：</b>サイトのゲーム詳細の下にある「このゲームの削除を依頼」から送信してください。登録したときと同じ GitHub アカウントで送ると、<b>自動ですぐに削除</b>されます。作者以外の方からの依頼（権利侵害の報告など）は、管理者が確認してから対応します。<br><b>更新：</b>いったん削除してから、同じゲームID で登録し直してください。</p>
         </details>
       </div>
 

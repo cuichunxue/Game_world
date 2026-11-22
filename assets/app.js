@@ -41,6 +41,91 @@
     toast._t = setTimeout(() => t.classList.remove("show"), 1800);
   }
 
+  /* ---------- play counts (shared, best effort) ---------- */
+  const Stats = (() => {
+    const cfg = (window.SITE && window.SITE.stats) || {};
+    const BASE = "https://abacus.jasoncameron.dev";
+    const ns = cfg.namespace;
+    const enabled = cfg.provider === "abacus" && /^[\w.-]{3,64}$/.test(ns || "");
+    const counts = new Map();
+    const listeners = new Set();
+    const CACHE = "gw:stats", HITS = "gw:hits";
+    const TTL = 5 * 60 * 1000, HIT_GAP = 6 * 60 * 60 * 1000;
+    let status = enabled ? "idle" : "off"; // idle | loading | ready | error | off
+    const key = (id) => `g-${id}`.slice(0, 64);
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const emit = () => listeners.forEach((fn) => fn());
+    const saveCache = () => store.set(CACHE, { t: Date.now(), c: Object.fromEntries(counts) });
+
+    // 返り値: 数値 / 0（未計測） / null（取得失敗）
+    async function call(path) {
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          const r = await fetch(`${BASE}/${path}`, { cache: "no-store" });
+          if (r.ok) { const j = await r.json(); return Number(j.value) || 0; }
+          if (r.status === 404 || r.status === 500) {
+            const j = await r.json().catch(() => ({}));
+            if (/failed to get data|not found/i.test(j.error || "")) return 0; // まだ一度も数えられていないキー
+          }
+          if (r.status === 429) await sleep(4000);
+        } catch {}
+        await sleep(800);
+      }
+      return null;
+    }
+
+    async function loadAll(ids) {
+      if (!enabled || !ids.length) return;
+      const c = store.get(CACHE, null);
+      if (c && Date.now() - c.t < TTL && ids.every((id) => id in c.c)) {
+        ids.forEach((id) => counts.set(id, c.c[id]));
+        status = "ready";
+        return emit();
+      }
+      status = "loading";
+      emit();
+      const queue = [...ids];
+      let ok = 0;
+      // API の制限（10秒に30回）を超えないよう、2本並列・間隔を空けて取得
+      const worker = async () => {
+        while (queue.length) {
+          const id = queue.shift();
+          const v = await call(`get/${ns}/${key(id)}`);
+          if (v !== null) { counts.set(id, v); ok++; }
+          await sleep(700);
+        }
+      };
+      await Promise.all([worker(), worker()]);
+      status = ok ? "ready" : "error";
+      if (ok) saveCache();
+      emit();
+    }
+
+    async function hit(id) {
+      if (!enabled) return;
+      const hits = store.get(HITS, {});
+      if (hits[id] && Date.now() - hits[id] < HIT_GAP) return; // 同じ端末の連続プレイは数えない
+      hits[id] = Date.now();
+      store.set(HITS, hits);
+      const v = await call(`hit/${ns}/${key(id)}`);
+      if (v !== null) {
+        counts.set(id, v);
+        if (status !== "loading") status = "ready";
+        saveCache();
+        emit();
+      }
+    }
+
+    return {
+      enabled, hit, loadAll,
+      get: (id) => counts.get(id),
+      status: () => status,
+      total: () => [...counts.values()].reduce((a, b) => a + b, 0),
+      onChange: (fn) => listeners.add(fn),
+    };
+  })();
+  const fmtNum = (n) => (n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, "") + "万" : n.toLocaleString("ja-JP"));
+
   /* ---------- state ---------- */
   const state = { q: "", genre: "all", sort: "new", favOnly: false, author: null };
 
@@ -59,6 +144,7 @@
       old: (a, b) => a.added.localeCompare(b.added),
       name: (a, b) => a.title.localeCompare(b.title, "ja"),
       short: (a, b) => (a.minutes || 0) - (b.minutes || 0),
+      popular: (a, b) => (Stats.get(b.id) ?? -1) - (Stats.get(a.id) ?? -1) || b.added.localeCompare(a.added),
     }[state.sort];
     return list.sort(by);
   }
@@ -72,10 +158,15 @@
     step();
   }
 
+  function renderTotal() {
+    const el = $("#statPlays");
+    el.textContent = Stats.status() === "ready" ? fmtNum(Stats.total()) : Stats.status() === "loading" ? "…" : "–";
+  }
+
   function renderHero() {
     countUp($("#statGames"), GAMES.length);
     countUp($("#statCreators"), new Set(GAMES.map((g) => g.author)).size);
-    countUp($("#statGenres"), new Set(GAMES.flatMap((g) => g.genres || [])).size);
+    renderTotal();
 
     const latest = [...GAMES].sort((a, b) => b.added.localeCompare(a.added))[0];
     if (!latest) return;
@@ -118,6 +209,7 @@
           <div class="meta">
             ${(g.genres || []).slice(0, 3).map((k) => `<span>${GENRES[k]?.emoji || ""} ${esc(GENRES[k]?.label || k)}</span>`).join("")}
             <span>⏱ ${g.minutes || "?"}分</span>
+            ${Stats.get(g.id) != null ? `<span class="plays" title="プレイ数">▶ ${fmtNum(Stats.get(g.id))}</span>` : ""}
           </div>
         </div>
       </article>`;
@@ -139,6 +231,41 @@
       af.hidden = false;
       af.innerHTML = `クリエイター: ${esc(creatorOf({ author: state.author }).name)} <button type="button" id="clearAuthor">✕ 解除</button>`;
     } else af.hidden = true;
+  }
+
+  /* ---------- render: ranking ---------- */
+  function renderRanking() {
+    const el = $("#rankList");
+    const st = Stats.status();
+    if (st === "off") { $("#ranking").hidden = true; return; }
+    if (st === "idle" || (st === "loading" && !GAMES.some((g) => Stats.get(g.id) != null))) {
+      el.innerHTML = `<li class="rank-msg">集計中…</li>`;
+      return;
+    }
+    if (st === "error") {
+      el.innerHTML = `<li class="rank-msg">ランキングを読み込めませんでした。時間をおいてページを再読み込みしてください。</li>`;
+      return;
+    }
+    const list = GAMES.filter((g) => Stats.get(g.id) != null)
+      .sort((a, b) => Stats.get(b.id) - Stats.get(a.id) || b.added.localeCompare(a.added))
+      .slice(0, 5);
+    const max = Math.max(1, ...list.map((g) => Stats.get(g.id)));
+    const none = list.every((g) => !Stats.get(g.id));
+    el.innerHTML =
+      (none ? `<li class="rank-msg">まだプレイ記録がありません。最初のプレイヤーになろう！</li>` : "") +
+      list.map((g, i) => {
+        const c = creatorOf(g), n = Stats.get(g.id);
+        return `<li class="rank-item r${i + 1}" data-open="${esc(g.id)}" tabindex="0" role="button" aria-label="${i + 1}位 ${esc(g.title)} ${n}回">
+          <span class="rank-no">${i + 1}</span>
+          <span class="rank-thumb" style="--c1:${esc((g.colors || [])[0] || "#ffc928")};--c2:${esc((g.colors || [])[1] || "#ff5a8f")}">${esc(g.emoji || "🎮")}</span>
+          <span class="rank-main">
+            <b>${esc(g.title)}</b>
+            <small>${esc(c.avatar)} ${esc(c.name)}</small>
+            <span class="rank-bar"><i style="width:${(n / max) * 100}%"></i></span>
+          </span>
+          <span class="rank-count">${fmtNum(n)}<small>回</small></span>
+        </li>`;
+      }).join("");
   }
 
   /* ---------- render: creators ---------- */
@@ -178,6 +305,7 @@
           <div><dt>対応端末</dt><dd>${deviceLabel(g.devices)}</dd></div>
           <div><dt>言語</dt><dd>${esc((g.langs || []).join(" / "))}</dd></div>
           <div><dt>公開日</dt><dd>${fmtDate(g.added)}</dd></div>
+          ${Stats.enabled ? `<div><dt>プレイ数</dt><dd>${Stats.get(g.id) != null ? fmtNum(Stats.get(g.id)) + " 回" : "—"}</dd></div>` : ""}
         </dl>
         <div class="d-actions">
           <button class="btn btn-primary" type="button" data-play="${esc(g.id)}">▶ いますぐ遊ぶ</button>
@@ -185,11 +313,16 @@
           <button class="btn" type="button" data-fav="${esc(g.id)}" aria-pressed="${fav}">${fav ? "♥ お気に入り済み" : "♡ お気に入り"}</button>
           <button class="btn" type="button" data-share="${esc(g.id)}">🔗 共有</button>
         </div>
+        ${REPO ? `<p class="d-report"><a href="${esc(removeURL(g))}" target="_blank" rel="noopener">🗑 このゲームの削除を依頼（作者・権利者の方）</a></p>` : ""}
         ${more.length ? `<div class="d-more"><h4>こちらもおすすめ</h4><div class="mini-list">${more.map((m) => `<button class="mini" type="button" data-open="${esc(m.id)}">${thumbHTML(m, { title: false })}<span>${esc(m.title)}</span></button>`).join("")}</div></div>` : ""}
       </div>`;
     if (!dlg.open) dlg.showModal();
     dlg.scrollTop = 0;
     history.replaceState(null, "", `#game=${encodeURIComponent(g.id)}`);
+  }
+  function removeURL(g) {
+    const p = new URLSearchParams({ template: "remove-game.yml", title: `[削除依頼] ${g.title}`, game_id: g.id });
+    return `https://github.com/${REPO}/issues/new?${p}`;
   }
   function closeDetail() {
     if (dlg.open) dlg.close();
@@ -210,6 +343,7 @@
     $("#playerHint").hidden = !isExternal(g);
     $("#hintNewTab").href = g.url;
     frame.src = g.url;
+    Stats.hit(g.id);
     player.hidden = false;
     document.body.classList.add("locked");
     $("#closePlayer").focus();
@@ -577,7 +711,13 @@
   window.addEventListener("hashchange", fromHash);
 
   /* ---------- init ---------- */
+  Stats.onChange(() => {
+    renderTotal();
+    renderRanking();
+    renderGrid();
+  });
   renderHero();
+  renderRanking();
   renderChips();
   renderGrid();
   renderCreators();
@@ -585,4 +725,5 @@
   restoreDraft();
   renderPreview();
   fromHash();
+  Stats.loadAll(GAMES.map((g) => g.id));
 })();

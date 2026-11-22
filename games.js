@@ -24,6 +24,8 @@
 window.SITE = {
   repo: "cuichunxue/Game_world",
   reviewDays: 3, // 審査の目安（日）。Actions のリポジトリ変数 REVIEW_DAYS も同じ値に
+  // プレイ数の集計（無料カウンター API「Abacus」）。namespace はサイトごとに固有の名前にする
+  stats: { provider: "abacus", namespace: "cuichunxue-game-world" },
 };
 
 window.GENRES = {
