@@ -27,6 +27,32 @@ window.COMMUNITY = {
         "#ff5a8f"
       ],
       "issue": 1
+    },
+    {
+      "id": "draw-roll-king2",
+      "title": "DRAW & ROLL KING2",
+      "catch": "自分で設計したものを動かせる",
+      "desc": "URLをクリックして開いて遊べる",
+      "author": "cuichunxue",
+      "url": "https://cuichunxue.github.io/Mini_game/#/play/draw-roll-king",
+      "genres": [
+        "action"
+      ],
+      "devices": [
+        "pc",
+        "mobile"
+      ],
+      "minutes": 1,
+      "langs": [
+        "日本語"
+      ],
+      "added": "2026-11-22",
+      "emoji": "🎮",
+      "colors": [
+        "#4d9bff",
+        "#ff5a8f"
+      ],
+      "issue": 2
     }
   ],
   "creators": {
