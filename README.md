@@ -56,7 +56,11 @@ games/<id>/       各ゲーム（index.html）
 2. Settings → Pages でデフォルトブランチの `/ (root)` を公開
 3. Settings → General → Features で **Issues** を有効にする
 4. 送信先を変える場合は `games.js` の `SITE.repo` を編集
-5. ラベル `game-submission` / `approved` は初回の登録時に自動で作られます
+5. 審査の目安日数は `games.js` の `SITE.reviewDays`（サイトの FAQ・送信後の案内）と、
+   Settings → Secrets and variables → Actions → Variables の `REVIEW_DAYS`（自動チェックのコメント）で設定（どちらも既定 3 日）
+6. 独自ドメインなどで公開する場合は、同じ画面の Variables に `SITE_URL`（例: `https://games.example.com/`）を設定。
+   未設定なら `https://<owner>.github.io/<repo>/` を公開完了コメントのリンクに使います
+7. ラベル `game-submission` / `approved` は初回の登録時に自動で作られます
 
 ## Pull Request で直接追加する（上級者向け）
 

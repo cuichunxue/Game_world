@@ -14,6 +14,7 @@ import json
 import os
 import re
 import sys
+import urllib.parse
 import urllib.request
 import zipfile
 from datetime import date
@@ -273,6 +274,33 @@ def output(key: str, val: str) -> None:
             f.write(f"{key}={val}\n")
 
 
+def review_days() -> str:
+    v = (os.environ.get("REVIEW_DAYS") or "").strip()
+    return v if v.isdigit() and 0 < int(v) < 100 else "3"
+
+
+def site_url() -> str:
+    """公開サイトの URL。リポジトリ変数 SITE_URL があれば優先、なければ GitHub Pages の URL を推定。"""
+    v = (os.environ.get("SITE_URL") or "").strip()
+    if re.match(r"^https://[^\s\"'<>]+$", v):
+        return v if v.endswith("/") else v + "/"
+    owner, _, repo = (os.environ.get("GITHUB_REPOSITORY") or "owner/repo").partition("/")
+    host = f"{owner.lower()}.github.io"
+    return f"https://{host}/" if repo.lower() == host else f"https://{host}/{repo}/"
+
+
+def share_block(entry: dict) -> str:
+    url = f"{site_url()}#game={urllib.parse.quote(entry['id'])}"
+    text = f"「{entry['title']}」を GAME WORLD で公開しました！ {entry['catch']} #GAMEWORLD #個人開発 #ミニゲーム".replace("`", "'")
+    intent = "https://twitter.com/intent/tweet?" + urllib.parse.urlencode({"text": text, "url": url})
+    return (
+        f"▶ **遊ぶ・共有する:** {url}\n\n"
+        f"[𝕏 でシェアする]({intent})\n\n"
+        "シェア用の文面（コピーして使えます）:\n\n"
+        f"```\n{text}\n{url}\n```"
+    )
+
+
 def preview(entry: dict) -> str:
     rows = [
         ("ゲームID", f"`{entry['id']}`"),
@@ -319,7 +347,9 @@ def main() -> int:
     if mode == "validate":
         comment_path.write_text(
             "### ✅ 自動チェックOK\n\n" + preview(entry) + files_note
-            + "\n\n管理者が内容を確認して `approved` ラベルを付けると、サイトに自動で公開されます。しばらくお待ちください 🙏",
+            + "\n\n管理者が内容を確認して `approved` ラベルを付けると、サイトに自動で公開されます。"
+            + f"\n\n⏳ **審査の目安: {review_days()} 日以内**（混み合っている場合は少し遅れることがあります）。"
+            + "公開されるとこの Issue にコメントが付き、GitHub から通知が届きます。",
             encoding="utf-8",
         )
         output("ok", "true")
@@ -336,7 +366,7 @@ def main() -> int:
     comment_path.write_text(
         f"### 🎉 公開しました！\n\n**{entry['title']}** を GAME WORLD に追加しました。"
         "\nサイトに反映されるまで数分かかることがあります。登録ありがとうございました！\n\n"
-        f"サイト内リンク: `#game={entry['id']}`",
+        + share_block(entry),
         encoding="utf-8",
     )
     return 0

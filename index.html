@@ -138,6 +138,7 @@
               <input name="url" type="url" inputmode="url" placeholder="https://your-name.github.io/my-game/">
             </label>
             <p class="hint">GitHub Pages・itch.io・自分のサイトなど、https で公開されている URL。</p>
+            <p class="note">ℹ️ サイトによってはサイト内での表示（埋め込み）を拒否するため、その場合プレイヤーは「新しいタブで開く」で遊びます。自分のゲームを確実にサイト内で遊んでもらいたいなら「ファイルで登録」がおすすめです。</p>
           </div>
 
           <div class="src-panel" data-src="file" hidden>
@@ -193,8 +194,12 @@
           <label class="agree"><input type="checkbox" name="agree"> ブラウザだけで動き、不正な通信をせず、自分が権利を持つ素材だけを使っています</label>
 
           <div class="form-errors" id="formErrors" role="alert" hidden></div>
+          <div class="draft-bar">
+            <span id="draftState" class="hint">入力内容はこのブラウザに自動で下書き保存されます</span>
+            <button class="link-btn" type="button" id="clearDraft">入力をクリア</button>
+          </div>
           <button class="btn btn-primary btn-wide" type="submit">GitHub で送信する ↗</button>
-          <p class="hint center">※ 送信には無料の GitHub アカウントが必要です</p>
+          <p class="hint center">※ 送信には無料の GitHub アカウントが必要です（<a href="https://github.com/signup" target="_blank" rel="noopener">アカウントを作る ↗</a>）</p>
         </form>
 
         <aside class="reg-side">
@@ -202,6 +207,38 @@
           <div id="regPreview" class="reg-preview"></div>
           <div class="next card-box" id="nextSteps" hidden></div>
         </aside>
+      </div>
+
+      <div class="faq">
+        <h3 class="faq-title">よくある質問</h3>
+        <details>
+          <summary>審査にはどれくらいかかりますか？</summary>
+          <p>自動チェックは送信から数十秒で終わり、結果が Issue にコメントされます。その後の管理者による確認は、目安として <b><span data-review-days>3</span> 日以内</b>です。公開されると Issue にコメントが付き、GitHub から通知メールが届きます。</p>
+        </details>
+        <details>
+          <summary>お金はかかりますか？ GitHub のアカウントは必要ですか？</summary>
+          <p>登録も掲載も無料です。送信には GitHub のアカウント（無料）が必要です。お持ちでない場合は <a href="https://github.com/signup" target="_blank" rel="noopener">github.com/signup</a> から数分で作れます。</p>
+        </details>
+        <details>
+          <summary>どんなゲームを登録できますか？</summary>
+          <p>ブラウザだけで動く HTML / JavaScript のゲームです。ファイルで登録する場合は zip で 20MB まで（展開後 50MB・500 ファイルまで）、中に <code>index.html</code> が必要です。外部への不正な通信や個人情報の収集をするもの、他人の権利を侵害するものは登録できません。</p>
+        </details>
+        <details>
+          <summary>URL とファイル、どちらで登録すればいいですか？</summary>
+          <p>すでに自分のサイトや itch.io などで公開しているなら URL が手軽です。ただしサイトによってはサイト内での表示を拒否するため、その場合は新しいタブで開いて遊ぶ形になります。まだ公開していない、またはサイト内で確実に遊んでほしい場合はファイルで登録してください。</p>
+        </details>
+        <details>
+          <summary>画像や音声があるゲームの zip はどう作りますか？</summary>
+          <p><b>Windows:</b> ゲームのフォルダを右クリック →「圧縮先」→「ZIP ファイル」。<b>Mac:</b> フォルダを右クリック →「"フォルダ名"を圧縮」。フォルダの中に <code>index.html</code> がある状態で圧縮してください。</p>
+        </details>
+        <details>
+          <summary>著作権や権利はどうなりますか？</summary>
+          <p>ゲームの著作権は作者のあなたに残ります。GAME WORLD はサイト上での掲載・配信のためにだけ使います。ファイル登録の場合、ゲームのファイルはこのサイトの公開リポジトリに保存されるため、誰でも中身を見られる点にご注意ください。</p>
+        </details>
+        <details>
+          <summary>公開後に更新や削除はできますか？</summary>
+          <p>現在は管理者が対応します。登録時の Issue にコメントするか、新しい Issue で「更新したい／削除したい」とゲームID を添えてお知らせください。</p>
+        </details>
       </div>
 
       <details class="advanced">
@@ -236,6 +273,10 @@
       <button class="icon-btn" id="fsBtn" type="button" aria-label="全画面">⛶</button>
       <a class="icon-btn" id="newTab" target="_blank" rel="noopener" aria-label="新しいタブで開く">↗</a>
     </div>
+  </div>
+  <div class="player-hint" id="playerHint" hidden>
+    <span>外部サイトのゲームです。画面が真っ白なままの場合は</span>
+    <a id="hintNewTab" target="_blank" rel="noopener">新しいタブで開く ↗</a>
   </div>
   <iframe id="frame" title="ゲーム" allow="autoplay; fullscreen; gamepad" allowfullscreen></iframe>
 </div>

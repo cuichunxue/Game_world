@@ -23,6 +23,7 @@
 // サイト設定：登録フォームの送信先リポジトリ（owner/repo）
 window.SITE = {
   repo: "cuichunxue/Game_world",
+  reviewDays: 3, // 審査の目安（日）。Actions のリポジトリ変数 REVIEW_DAYS も同じ値に
 };
 
 window.GENRES = {

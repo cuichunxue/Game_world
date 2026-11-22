@@ -26,6 +26,7 @@ jobs:
       - name: Validate
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          REVIEW_DAYS: ${{ vars.REVIEW_DAYS }}
         run: python3 scripts/game_submission.py validate "$RUNNER_TEMP/comment.md"
       - name: Comment
         env:
@@ -58,6 +59,7 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
           ISSUE_NO: ${{ github.event.issue.number }}
           BRANCH: ${{ github.event.repository.default_branch }}
+          SITE_URL: ${{ vars.SITE_URL }}
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"

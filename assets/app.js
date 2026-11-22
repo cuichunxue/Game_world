@@ -6,6 +6,7 @@
   const GENRES = window.GENRES || {};
   const CREATORS = { ...(COMMUNITY.creators || {}), ...(window.CREATORS || {}) };
   const REPO = (window.SITE && window.SITE.repo) || "";
+  const REVIEW_DAYS = (window.SITE && window.SITE.reviewDays) || 3;
   const $ = (s, r = document) => r.querySelector(s);
   const NEW_DAYS = 30;
 
@@ -21,6 +22,9 @@
   const creatorOf = (g) => CREATORS[g.author] || { name: g.author, avatar: "🙂", color: "#ddd" };
   const isNew = (g) => (Date.now() - new Date(g.added).getTime()) / 864e5 <= NEW_DAYS;
   const fmtDate = (d) => { const t = new Date(d); return isNaN(t) ? d : `${t.getFullYear()}.${t.getMonth() + 1}.${t.getDate()}`; };
+  const isExternal = (g) => {
+    try { return new URL(g.url, location.href).origin !== location.origin; } catch { return false; }
+  };
   const deviceLabel = (ds = []) => ds.map((d) => (d === "pc" ? "💻 PC" : d === "mobile" ? "📱 スマホ" : d)).join(" / ");
 
   function thumbHTML(g, { title = true } = {}) {
@@ -164,7 +168,7 @@
       <button class="icon-btn x" type="button" data-close aria-label="閉じる">✕</button>
       ${thumbHTML(g, { title: false })}
       <div class="d-body">
-        <h2 id="dTitle">${esc(g.title)}</h2>
+        <h2 id="dTitle">${esc(g.title)}${isExternal(g) ? `<span class="ext-badge">外部サイト</span>` : ""}</h2>
         <p class="catch">${esc(g.catch)}</p>
         <p class="desc">${esc(g.desc)}</p>
         <dl class="d-specs">
@@ -177,6 +181,7 @@
         </dl>
         <div class="d-actions">
           <button class="btn btn-primary" type="button" data-play="${esc(g.id)}">▶ いますぐ遊ぶ</button>
+          ${isExternal(g) ? `<a class="btn" href="${esc(g.url)}" target="_blank" rel="noopener">↗ 新しいタブで遊ぶ</a>` : ""}
           <button class="btn" type="button" data-fav="${esc(g.id)}" aria-pressed="${fav}">${fav ? "♥ お気に入り済み" : "♡ お気に入り"}</button>
           <button class="btn" type="button" data-share="${esc(g.id)}">🔗 共有</button>
         </div>
@@ -202,6 +207,8 @@
     closeDetail();
     $("#playerTitle").textContent = g.title;
     $("#newTab").href = g.url;
+    $("#playerHint").hidden = !isExternal(g);
+    $("#hintNewTab").href = g.url;
     frame.src = g.url;
     player.hidden = false;
     document.body.classList.add("locked");
@@ -328,11 +335,7 @@
     delete CREATORS.__you__;
   }
 
-  reg.querySelectorAll("[name=source]").forEach((r) =>
-    r.addEventListener("change", () => {
-      reg.querySelectorAll(".src-panel").forEach((p) => (p.hidden = p.dataset.src !== source()));
-    })
-  );
+  reg.querySelectorAll("[name=source]").forEach((r) => r.addEventListener("change", () => applySource()));
 
   /* file handling */
   let jszipPromise = null;
@@ -398,6 +401,57 @@
     if (f) handleFile(f);
   });
 
+  /* draft (best effort, per browser) */
+  const DRAFT_KEY = "gw:draft";
+  const DRAFT_FIELDS = ["source", "url", "title", "id", "catch", "desc", "minutes", "langs", "emoji", "c1", "c2", "creator_name", "creator_avatar", "creator_bio"];
+  let draftTimer = 0;
+  function saveDraft() {
+    clearTimeout(draftTimer);
+    draftTimer = setTimeout(() => {
+      const fd = new FormData(reg);
+      const d = { genres: fd.getAll("genres"), devices: fd.getAll("devices"), idTouched };
+      DRAFT_FIELDS.forEach((n) => (d[n] = fd.get(n) ?? ""));
+      store.set(DRAFT_KEY, d);
+      const t = new Date();
+      $("#draftState").textContent = `下書きを保存しました（${t.getHours()}:${String(t.getMinutes()).padStart(2, "0")}）`;
+    }, 400);
+  }
+  function applySource() {
+    reg.querySelectorAll(".src-panel").forEach((p) => (p.hidden = p.dataset.src !== source()));
+  }
+  function restoreDraft() {
+    const d = store.get(DRAFT_KEY, null);
+    if (!d || !Object.values(d).some((v) => (Array.isArray(v) ? v.length : v && v !== true))) return false;
+    DRAFT_FIELDS.forEach((n) => {
+      if (n === "source") {
+        const r = reg.querySelector(`[name=source][value="${d.source === "file" ? "file" : "url"}"]`);
+        if (r) r.checked = true;
+      } else if (reg.elements[n] && d[n] != null && d[n] !== "") reg.elements[n].value = d[n];
+    });
+    reg.querySelectorAll("[name=genres]").forEach((c) => (c.checked = (d.genres || []).includes(c.value)));
+    if (Array.isArray(d.devices)) reg.querySelectorAll("[name=devices]").forEach((c) => (c.checked = d.devices.includes(c.value)));
+    idTouched = !!d.idTouched;
+    applySource();
+    if (d.source === "file") fileStatus("", "📎 下書きにはファイルは保存されません。もう一度ファイルを選んでください");
+    $("#draftState").textContent = "前回の下書きを復元しました";
+    return true;
+  }
+  $("#clearDraft").addEventListener("click", () => {
+    reg.reset();
+    store.set(DRAFT_KEY, null);
+    try { localStorage.removeItem(DRAFT_KEY); } catch {}
+    idTouched = false;
+    upload = null;
+    fileInput.value = "";
+    $("#fileStatus").hidden = true;
+    $("#formErrors").hidden = true;
+    $("#nextSteps").hidden = true;
+    reg.querySelectorAll("[aria-invalid]").forEach((el) => el.removeAttribute("aria-invalid"));
+    applySource();
+    renderPreview();
+    $("#draftState").textContent = "入力をクリアしました";
+  });
+
   /* validation */
   function validateReg() {
     const errs = [];
@@ -457,26 +511,46 @@
     setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
   }
 
+  function ghMock(isFile) {
+    const mk = (n) => `<span class="mk" aria-hidden="true">${n}</span>`;
+    let n = 0;
+    return `
+      <div class="gh-guide">
+        <p class="cap">GitHub の画面ではここだけ操作します</p>
+        <div class="gh-mock" role="img" aria-label="GitHub の登録画面の見本。${isFile ? "ゲームファイル欄に zip をドロップし、" : ""}投稿ルールにチェックして、緑の Create ボタンを押します">
+          <div class="gh-top"><i></i>${esc(REPO)} · New issue</div>
+          <div class="gh-f"><b>Add a title</b><span class="ok">[ゲーム登録] ${esc(val("title"))}</span></div>
+          <div class="gh-f"><b>ゲームID</b><span class="ok">${esc(val("id"))}</span></div>
+          <div class="gh-f gh-dim"><b>ゲーム名・説明文・ジャンル…</b><span class="ok">入力済み（さわらなくて OK）</span></div>
+          ${isFile ? `<div class="gh-f gh-drop"><b>ゲームファイル${mk(++n)}</b><span>⬇ ${esc(upload.zipName)} をここにドロップ</span></div>` : ""}
+          <div class="gh-f chk"><b>投稿ルール${mk(++n)}</b><span>☑ ブラウザだけで動き…<br>☑ 自分が権利を持つ…</span></div>
+          <span class="gh-btn">Create</span>${mk(++n)}
+        </div>
+      </div>`;
+  }
+
   function showNext(url) {
     const isFile = source() === "file";
     const box = $("#nextSteps");
     box.hidden = false;
     box.innerHTML = `
       <h4>📮 あと少しで送信完了！</h4>
+      <p class="hint" style="margin-bottom:10px">新しいタブで GitHub の登録画面が開きました。入力内容は自動で入っています。${isFile && upload.converted ? `zip は <b>ダウンロードフォルダ</b> に保存しました。` : ""}</p>
+      ${ghMock(isFile)}
       <ol>
-        <li>新しいタブで GitHub の登録画面が開きました（入力内容は自動で入っています）</li>
-        ${isFile ? `<li><b>${esc(upload.zipName)}</b> を「ゲームファイル」欄にドラッグ＆ドロップ${upload.converted ? "（ダウンロードフォルダに保存しました）" : ""}</li>` : ""}
-        <li>ルールにチェックして <b>Create</b> を押す</li>
-        <li>数十秒で自動チェックの結果がコメントされます</li>
+        ${isFile ? `<li><b>${esc(upload.zipName)}</b> を「ゲームファイル」欄にドラッグ＆ドロップ</li>` : ""}
+        <li>「投稿ルール」の2つにチェック</li>
+        <li>緑の <b>Create</b> ボタンを押す</li>
       </ol>
+      <p class="hint" style="margin-bottom:12px">数十秒で自動チェックの結果がコメントされます。審査の目安は <b>${REVIEW_DAYS} 日以内</b>です。ログイン画面が出たら、ログイン後に元の画面へ戻ります。</p>
       <a class="btn btn-primary" href="${esc(url)}" target="_blank" rel="noopener">GitHub の画面をもう一度開く ↗</a>
       ${isFile && upload.converted ? `<button class="btn" type="button" id="dlAgain">⬇ zip をもう一度保存</button>` : ""}`;
     $("#dlAgain")?.addEventListener("click", () => saveBlob(upload.zipBlob, upload.zipName));
     box.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
 
-  reg.addEventListener("input", renderPreview);
-  reg.addEventListener("change", renderPreview);
+  reg.addEventListener("input", () => { renderPreview(); saveDraft(); });
+  reg.addEventListener("change", () => { renderPreview(); saveDraft(); });
   reg.addEventListener("submit", (e) => {
     e.preventDefault();
     const errs = validateReg();
@@ -507,6 +581,8 @@
   renderChips();
   renderGrid();
   renderCreators();
+  document.querySelectorAll("[data-review-days]").forEach((el) => (el.textContent = REVIEW_DAYS));
+  restoreDraft();
   renderPreview();
   fromHash();
 })();
