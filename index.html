@@ -106,7 +106,7 @@
     <div class="wrap">
       <div class="sec-head">
         <h2><span class="tag-num">02</span>クリエイター</h2>
-        <p class="sec-sub">ゲームを作っている人たち。クリックで作品を絞り込み。</p>
+        <p class="sec-sub">ゲームを作っている人たち。クリックで作品・プレイ数・順位をまとめたページが開きます。</p>
       </div>
       <div class="creators" id="creatorList"></div>
     </div>
@@ -249,6 +249,10 @@
           <p>ゲームの著作権は作者のあなたに残ります。GAME WORLD はサイト上での掲載・配信のためにだけ使います。ファイル登録の場合、ゲームのファイルはこのサイトの公開リポジトリに保存されるため、誰でも中身を見られる点にご注意ください。</p>
         </details>
         <details>
+          <summary>公開したゲームの反応はどこで見られますか？</summary>
+          <p>「クリエイター」欄で自分の名前を押すと、<b>あなたのページ</b>が開きます。作品ごとのプレイ数、全体での順位、プレイヤーからのリアクション（😂 🔥 👍）を1画面で確認できます。公開完了のコメントにもリンクが載っているので、ブックマークしておくと便利です。</p>
+        </details>
+        <details>
           <summary>公開後に更新や削除はできますか？</summary>
           <p><b>削除：</b>サイトのゲーム詳細の下にある「このゲームの削除を依頼」から送信してください。登録したときと同じ GitHub アカウントで送ると、<b>自動ですぐに削除</b>されます。作者以外の方からの依頼（権利侵害の報告など）は、管理者が確認してから対応します。<br><b>更新：</b>いったん削除してから、同じゲームID で登録し直してください。</p>
         </details>
@@ -275,6 +279,11 @@
 <!-- 詳細モーダル -->
 <dialog class="modal" id="detail" aria-labelledby="dTitle">
   <div class="modal-body" id="detailBody"></div>
+</dialog>
+
+<!-- クリエイターページ -->
+<dialog class="modal creator-modal" id="creatorDlg" aria-labelledby="cTitle">
+  <div class="modal-body" id="creatorBody"></div>
 </dialog>
 
 <!-- プレイヤー -->

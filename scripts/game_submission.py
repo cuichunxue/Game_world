@@ -366,7 +366,9 @@ def main() -> int:
     comment_path.write_text(
         f"### 🎉 公開しました！\n\n**{entry['title']}** を GAME WORLD に追加しました。"
         "\nサイトに反映されるまで数分かかることがあります。登録ありがとうございました！\n\n"
-        + share_block(entry),
+        + share_block(entry)
+        + f"\n\n📈 **あなたのページ:** {site_url()}#creator={urllib.parse.quote(login)}\n"
+        "作品ごとのプレイ数・全体での順位・プレイヤーからのリアクション（😂 🔥 👍）をここでいつでも確認できます。ブックマークしておくと便利です。",
         encoding="utf-8",
     )
     return 0

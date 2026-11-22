@@ -41,21 +41,40 @@
     toast._t = setTimeout(() => t.classList.remove("show"), 1800);
   }
 
-  /* ---------- play counts (shared, best effort) ---------- */
+  /* ---------- play counts & reactions (shared, best effort) ---------- */
+  const REACTIONS = [["lol", "😂", "笑った"], ["fire", "🔥", "熱い"], ["good", "👍", "よかった"]];
   const Stats = (() => {
     const cfg = (window.SITE && window.SITE.stats) || {};
     const BASE = "https://abacus.jasoncameron.dev";
     const ns = cfg.namespace;
     const enabled = cfg.provider === "abacus" && /^[\w.-]{3,64}$/.test(ns || "");
-    const counts = new Map();
+    const counts = new Map(); // abacus key -> number
     const listeners = new Set();
-    const CACHE = "gw:stats", HITS = "gw:hits";
+    const CACHE = "gw:stats2", HITS = "gw:hits", REACTED = "gw:reacted";
     const TTL = 5 * 60 * 1000, HIT_GAP = 6 * 60 * 60 * 1000;
-    let status = enabled ? "idle" : "off"; // idle | loading | ready | error | off
-    const key = (id) => `g-${id}`.slice(0, 64);
+    let status = enabled ? "idle" : "off"; // プレイ数の読み込み状態: idle | loading | ready | error | off
+    const playKey = (id) => `g-${id}`.slice(0, 64);
+    const reactKey = (id, r) => `r-${r}-${id}`.slice(0, 64);
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     const emit = () => listeners.forEach((fn) => fn());
-    const saveCache = () => store.set(CACHE, { t: Date.now(), c: Object.fromEntries(counts) });
+
+    // キャッシュ: { key: [値, 取得時刻] }
+    const cache = store.get(CACHE, {}) || {};
+    const fresh = (k) => cache[k] && Date.now() - cache[k][1] < TTL;
+    const remember = (k, v) => { counts.set(k, v); cache[k] = [v, Date.now()]; store.set(CACHE, cache); };
+    Object.entries(cache).forEach(([k, [v]]) => counts.set(k, v));
+
+    // API の制限（10秒に30回）を超えないよう、全リクエストを1本の列で2並列・間隔を空けて送る
+    const queue = [];
+    let running = 0;
+    function pump() {
+      while (running < 2 && queue.length) {
+        const { path, resolve } = queue.shift();
+        running++;
+        call(path).then(resolve).finally(() => setTimeout(() => { running--; pump(); }, 700));
+      }
+    }
+    const request = (path) => new Promise((resolve) => { queue.push({ path, resolve }); pump(); });
 
     // 返り値: 数値 / 0（未計測） / null（取得失敗）
     async function call(path) {
@@ -74,30 +93,29 @@
       return null;
     }
 
-    async function loadAll(ids) {
+    async function fetchKeys(keys) {
+      const need = keys.filter((k) => !fresh(k));
+      let ok = keys.length - need.length;
+      await Promise.all(need.map(async (k) => {
+        const v = await request(`get/${ns}/${k}`);
+        if (v !== null) { remember(k, v); ok++; }
+      }));
+      return ok;
+    }
+
+    async function loadPlays(ids) {
       if (!enabled || !ids.length) return;
-      const c = store.get(CACHE, null);
-      if (c && Date.now() - c.t < TTL && ids.every((id) => id in c.c)) {
-        ids.forEach((id) => counts.set(id, c.c[id]));
-        status = "ready";
-        return emit();
-      }
+      if (ids.every((id) => fresh(playKey(id)))) { status = "ready"; return emit(); }
       status = "loading";
       emit();
-      const queue = [...ids];
-      let ok = 0;
-      // API の制限（10秒に30回）を超えないよう、2本並列・間隔を空けて取得
-      const worker = async () => {
-        while (queue.length) {
-          const id = queue.shift();
-          const v = await call(`get/${ns}/${key(id)}`);
-          if (v !== null) { counts.set(id, v); ok++; }
-          await sleep(700);
-        }
-      };
-      await Promise.all([worker(), worker()]);
+      const ok = await fetchKeys(ids.map(playKey));
       status = ok ? "ready" : "error";
-      if (ok) saveCache();
+      emit();
+    }
+
+    async function loadReactions(ids) {
+      if (!enabled || !ids.length) return;
+      await fetchKeys(ids.flatMap((id) => REACTIONS.map(([r]) => reactKey(id, r))));
       emit();
     }
 
@@ -107,24 +125,49 @@
       if (hits[id] && Date.now() - hits[id] < HIT_GAP) return; // 同じ端末の連続プレイは数えない
       hits[id] = Date.now();
       store.set(HITS, hits);
-      const v = await call(`hit/${ns}/${key(id)}`);
+      const v = await request(`hit/${ns}/${playKey(id)}`);
       if (v !== null) {
-        counts.set(id, v);
+        remember(playKey(id), v);
         if (status !== "loading") status = "ready";
-        saveCache();
         emit();
       }
     }
 
+    const reactedMap = () => store.get(REACTED, {}) || {};
+    async function react(id, r) {
+      if (!enabled) return false;
+      const m = reactedMap();
+      if (m[`${id}:${r}`]) return false; // 1つの端末から各リアクション1回まで
+      m[`${id}:${r}`] = Date.now();
+      store.set(REACTED, m);
+      counts.set(reactKey(id, r), (counts.get(reactKey(id, r)) || 0) + 1); // 先に画面へ反映
+      emit();
+      const v = await request(`hit/${ns}/${reactKey(id, r)}`);
+      if (v !== null) remember(reactKey(id, r), v);
+      emit();
+      return v !== null;
+    }
+
     return {
-      enabled, hit, loadAll,
-      get: (id) => counts.get(id),
+      enabled, hit, react, loadPlays, loadReactions,
+      plays: (id) => counts.get(playKey(id)),
+      reaction: (id, r) => counts.get(reactKey(id, r)),
+      reactions: (id) => REACTIONS.reduce((a, [r]) => a + (counts.get(reactKey(id, r)) || 0), 0),
+      reacted: (id, r) => !!reactedMap()[`${id}:${r}`],
       status: () => status,
-      total: () => [...counts.values()].reduce((a, b) => a + b, 0),
       onChange: (fn) => listeners.add(fn),
     };
   })();
   const fmtNum = (n) => (n >= 10000 ? (n / 10000).toFixed(1).replace(/\.0$/, "") + "万" : n.toLocaleString("ja-JP"));
+  const totalPlays = () => GAMES.reduce((a, g) => a + (Stats.plays(g.id) || 0), 0);
+  // 同じ回数は同じ順位（1, 2, 2, 4 …）
+  function rankOf(id) {
+    const mine = Stats.plays(id);
+    if (mine == null || Stats.status() === "off") return null;
+    const ranked = GAMES.filter((g) => Stats.plays(g.id) != null);
+    return { rank: 1 + ranked.filter((g) => Stats.plays(g.id) > mine).length, total: ranked.length };
+  }
+  const rankText = (id) => { const r = rankOf(id); return r ? `全 ${r.total} 本中 ${r.rank} 位` : "—"; };
 
   /* ---------- state ---------- */
   const state = { q: "", genre: "all", sort: "new", favOnly: false, author: null };
@@ -144,7 +187,7 @@
       old: (a, b) => a.added.localeCompare(b.added),
       name: (a, b) => a.title.localeCompare(b.title, "ja"),
       short: (a, b) => (a.minutes || 0) - (b.minutes || 0),
-      popular: (a, b) => (Stats.get(b.id) ?? -1) - (Stats.get(a.id) ?? -1) || b.added.localeCompare(a.added),
+      popular: (a, b) => (Stats.plays(b.id) ?? -1) - (Stats.plays(a.id) ?? -1) || b.added.localeCompare(a.added),
     }[state.sort];
     return list.sort(by);
   }
@@ -160,7 +203,7 @@
 
   function renderTotal() {
     const el = $("#statPlays");
-    el.textContent = Stats.status() === "ready" ? fmtNum(Stats.total()) : Stats.status() === "loading" ? "…" : "–";
+    el.textContent = Stats.status() === "ready" ? fmtNum(totalPlays()) : Stats.status() === "loading" ? "…" : "–";
   }
 
   function renderHero() {
@@ -209,7 +252,7 @@
           <div class="meta">
             ${(g.genres || []).slice(0, 3).map((k) => `<span>${GENRES[k]?.emoji || ""} ${esc(GENRES[k]?.label || k)}</span>`).join("")}
             <span>⏱ ${g.minutes || "?"}分</span>
-            ${Stats.get(g.id) != null ? `<span class="plays" title="プレイ数">▶ ${fmtNum(Stats.get(g.id))}</span>` : ""}
+            ${Stats.plays(g.id) != null ? `<span class="plays" title="プレイ数">▶ ${fmtNum(Stats.plays(g.id))}</span>` : ""}
           </div>
         </div>
       </article>`;
@@ -238,7 +281,7 @@
     const el = $("#rankList");
     const st = Stats.status();
     if (st === "off") { $("#ranking").hidden = true; return; }
-    if (st === "idle" || (st === "loading" && !GAMES.some((g) => Stats.get(g.id) != null))) {
+    if (st === "idle" || (st === "loading" && !GAMES.some((g) => Stats.plays(g.id) != null))) {
       el.innerHTML = `<li class="rank-msg">集計中…</li>`;
       return;
     }
@@ -246,17 +289,18 @@
       el.innerHTML = `<li class="rank-msg">ランキングを読み込めませんでした。時間をおいてページを再読み込みしてください。</li>`;
       return;
     }
-    const list = GAMES.filter((g) => Stats.get(g.id) != null)
-      .sort((a, b) => Stats.get(b.id) - Stats.get(a.id) || b.added.localeCompare(a.added))
+    const list = GAMES.filter((g) => Stats.plays(g.id) != null)
+      .sort((a, b) => Stats.plays(b.id) - Stats.plays(a.id) || b.added.localeCompare(a.added))
       .slice(0, 5);
-    const max = Math.max(1, ...list.map((g) => Stats.get(g.id)));
-    const none = list.every((g) => !Stats.get(g.id));
+    const max = Math.max(1, ...list.map((g) => Stats.plays(g.id)));
+    const none = list.every((g) => !Stats.plays(g.id));
     el.innerHTML =
       (none ? `<li class="rank-msg">まだプレイ記録がありません。最初のプレイヤーになろう！</li>` : "") +
       list.map((g, i) => {
-        const c = creatorOf(g), n = Stats.get(g.id);
-        return `<li class="rank-item r${i + 1}" data-open="${esc(g.id)}" tabindex="0" role="button" aria-label="${i + 1}位 ${esc(g.title)} ${n}回">
-          <span class="rank-no">${i + 1}</span>
+        const c = creatorOf(g), n = Stats.plays(g.id);
+        const no = rankOf(g.id)?.rank ?? i + 1;
+        return `<li class="rank-item r${Math.min(no, 4)}${i === 0 ? " top" : ""}" data-open="${esc(g.id)}" tabindex="0" role="button" aria-label="${no}位 ${esc(g.title)} ${n}回">
+          <span class="rank-no">${no}</span>
           <span class="rank-thumb" style="--c1:${esc((g.colors || [])[0] || "#ffc928")};--c2:${esc((g.colors || [])[1] || "#ff5a8f")}">${esc(g.emoji || "🎮")}</span>
           <span class="rank-main">
             <b>${esc(g.title)}</b>
@@ -275,7 +319,7 @@
       ids.map((id) => {
         const c = creatorOf({ author: id });
         const n = GAMES.filter((g) => g.author === id).length;
-        return `<button class="creator" type="button" data-author="${esc(id)}">
+        return `<button class="creator" type="button" data-creator="${esc(id)}">
           <span class="ava" style="--ac:${esc(c.color)}">${esc(c.avatar)}</span>
           <div><h3>${esc(c.name)}</h3><p>${esc(c.bio || "")}</p><span class="cnt"><b>${n}</b> 作品</span></div>
         </button>`;
@@ -299,13 +343,14 @@
         <p class="catch">${esc(g.catch)}</p>
         <p class="desc">${esc(g.desc)}</p>
         <dl class="d-specs">
-          <div><dt>クリエイター</dt><dd>${esc(c.avatar)} ${esc(c.name)}</dd></div>
+          <div><dt>クリエイター</dt><dd><button class="link-inline" type="button" data-creator="${esc(g.author)}">${esc(c.avatar)} ${esc(c.name)} ›</button></dd></div>
           <div><dt>ジャンル</dt><dd>${(g.genres || []).map((k) => esc(GENRES[k]?.label || k)).join("・")}</dd></div>
           <div><dt>プレイ時間</dt><dd>約 ${g.minutes || "?"} 分</dd></div>
           <div><dt>対応端末</dt><dd>${deviceLabel(g.devices)}</dd></div>
           <div><dt>言語</dt><dd>${esc((g.langs || []).join(" / "))}</dd></div>
           <div><dt>公開日</dt><dd>${fmtDate(g.added)}</dd></div>
-          ${Stats.enabled ? `<div><dt>プレイ数</dt><dd>${Stats.get(g.id) != null ? fmtNum(Stats.get(g.id)) + " 回" : "—"}</dd></div>` : ""}
+          ${Stats.enabled ? `<div><dt>プレイ数</dt><dd id="dPlays">${Stats.plays(g.id) != null ? fmtNum(Stats.plays(g.id)) + " 回" : "—"}</dd></div>
+          <div><dt>人気順位</dt><dd id="dRank">${rankText(g.id)}</dd></div>` : ""}
         </dl>
         <div class="d-actions">
           <button class="btn btn-primary" type="button" data-play="${esc(g.id)}">▶ いますぐ遊ぶ</button>
@@ -313,12 +358,112 @@
           <button class="btn" type="button" data-fav="${esc(g.id)}" aria-pressed="${fav}">${fav ? "♥ お気に入り済み" : "♡ お気に入り"}</button>
           <button class="btn" type="button" data-share="${esc(g.id)}">🔗 共有</button>
         </div>
+        ${Stats.enabled ? `<div class="react" id="reactBox" data-game="${esc(g.id)}">${reactHTML(g.id)}</div>` : ""}
         ${REPO ? `<p class="d-report"><a href="${esc(removeURL(g))}" target="_blank" rel="noopener">🗑 このゲームの削除を依頼（作者・権利者の方）</a></p>` : ""}
         ${more.length ? `<div class="d-more"><h4>こちらもおすすめ</h4><div class="mini-list">${more.map((m) => `<button class="mini" type="button" data-open="${esc(m.id)}">${thumbHTML(m, { title: false })}<span>${esc(m.title)}</span></button>`).join("")}</div></div>` : ""}
       </div>`;
+    if (cdlg.open) cdlg.close();
     if (!dlg.open) dlg.showModal();
     dlg.scrollTop = 0;
     history.replaceState(null, "", `#game=${encodeURIComponent(g.id)}`);
+    Stats.loadReactions([g.id]);
+  }
+
+  /* ---------- reactions ---------- */
+  function reactHTML(id) {
+    return `<p class="react-q">遊んでみてどうだった？ <small>ワンタップで作者に届きます</small></p>
+      <div class="react-btns">${REACTIONS.map(([r, e, label]) => {
+        const done = Stats.reacted(id, r), n = Stats.reaction(id, r);
+        return `<button class="react-btn" type="button" data-react="${esc(id)}" data-r="${r}" aria-pressed="${done}" ${done ? "disabled" : ""} aria-label="${label}${n != null ? ` ${n}件` : ""}${done ? "（送信済み）" : ""}">
+          <span class="e" aria-hidden="true">${e}</span><span class="l">${label}</span><b>${n != null ? fmtNum(n) : "–"}</b></button>`;
+      }).join("")}</div>`;
+  }
+  function refreshDetailStats() {
+    const box = $("#reactBox");
+    if (!dlg.open || !box) return;
+    const id = box.dataset.game;
+    box.innerHTML = reactHTML(id);
+    const p = $("#dPlays"), r = $("#dRank");
+    if (p) p.textContent = Stats.plays(id) != null ? fmtNum(Stats.plays(id)) + " 回" : "—";
+    if (r) r.textContent = rankText(id);
+  }
+  async function sendReaction(id, r) {
+    const ok = await Stats.react(id, r);
+    toast(ok ? "作者に届きました！ ありがとう" : "送信できませんでした。時間をおいてもう一度お試しください");
+  }
+
+  /* ---------- creator page ---------- */
+  const cdlg = $("#creatorDlg");
+  function openCreator(cid) {
+    const games = GAMES.filter((g) => g.author === cid);
+    if (!games.length && !CREATORS[cid]) return;
+    if (dlg.open) dlg.close();
+    renderCreatorPage(cid);
+    if (!cdlg.open) cdlg.showModal();
+    cdlg.scrollTop = 0;
+    history.replaceState(null, "", `#creator=${encodeURIComponent(cid)}`);
+    Stats.loadReactions(games.map((g) => g.id));
+  }
+  function renderCreatorPage(cid) {
+    const c = creatorOf({ author: cid });
+    const games = GAMES.filter((g) => g.author === cid)
+      .sort((a, b) => (Stats.plays(b.id) ?? -1) - (Stats.plays(a.id) ?? -1) || b.added.localeCompare(a.added));
+    const plays = games.reduce((a, g) => a + (Stats.plays(g.id) || 0), 0);
+    const reacts = games.reduce((a, g) => a + Stats.reactions(g.id), 0);
+    const best = games.map((g) => rankOf(g.id)?.rank).filter(Boolean).sort((a, b) => a - b)[0];
+    const loaded = Stats.status() === "ready";
+    const tile = (label, val) => `<div><dt>${label}</dt><dd>${val}</dd></div>`;
+    $("#creatorBody").innerHTML = `
+      <button class="icon-btn x" type="button" data-close-creator aria-label="閉じる">✕</button>
+      <div class="cp-head">
+        <span class="ava cp-ava" style="--ac:${esc(c.color || "#ffc928")}">${esc(c.avatar || "🙂")}</span>
+        <div class="cp-id">
+          <p class="cp-kicker">クリエイター</p>
+          <h2 id="cTitle">${esc(c.name)}</h2>
+          ${c.bio ? `<p class="cp-bio">${esc(c.bio)}</p>` : ""}
+          ${c.link ? `<a class="cp-link" href="${esc(c.link)}" target="_blank" rel="noopener">GitHub ↗</a>` : ""}
+        </div>
+      </div>
+      <dl class="cp-stats">
+        ${tile("作品", games.length)}
+        ${Stats.enabled ? tile("合計プレイ", loaded ? fmtNum(plays) : "…") + tile("リアクション", fmtNum(reacts)) + tile("最高順位", best ? `${best} 位` : "—") : ""}
+      </dl>
+      <ol class="cp-games">
+        ${games.map((g) => {
+          const r = rankOf(g.id);
+          return `<li class="cp-game">
+            <button class="cp-thumb" type="button" data-open="${esc(g.id)}" style="--c1:${esc((g.colors || [])[0] || "#ffc928")};--c2:${esc((g.colors || [])[1] || "#ff5a8f")}" aria-label="${esc(g.title)} の詳細">${esc(g.emoji || "🎮")}</button>
+            <div class="cp-main">
+              <button class="cp-title" type="button" data-open="${esc(g.id)}">${esc(g.title)}</button>
+              <p class="cp-meta">
+                ${Stats.enabled ? `<span>▶ ${Stats.plays(g.id) != null ? fmtNum(Stats.plays(g.id)) + " 回" : "—"}</span>
+                <span class="${r && r.rank <= 3 ? "hot" : ""}">🏆 ${r ? `全 ${r.total} 本中 ${r.rank} 位` : "—"}</span>
+                <span>${REACTIONS.map(([k, e]) => `${e} ${Stats.reaction(g.id, k) ?? "–"}`).join("　")}</span>` : ""}
+                <span>📅 ${fmtDate(g.added)}</span>
+              </p>
+            </div>
+            <button class="btn btn-sm btn-primary" type="button" data-play="${esc(g.id)}">▶ 遊ぶ</button>
+          </li>`;
+        }).join("") || `<li class="rank-msg">まだ作品がありません</li>`}
+      </ol>
+      <p class="cp-note">プレイ数・順位・リアクションは数分ごとに更新されます。プレイ数は同じ端末から6時間に1回、リアクションは1端末につき各1回まで数えます。</p>
+      <div class="cp-actions">
+        <button class="btn" type="button" data-share-creator="${esc(cid)}">🔗 このページを共有</button>
+        <button class="btn" type="button" data-author="${esc(cid)}">一覧でこの人の作品を見る</button>
+      </div>`;
+  }
+  function closeCreator() { if (cdlg.open) cdlg.close(); }
+  cdlg.addEventListener("close", () => {
+    if (location.hash.startsWith("#creator=")) history.replaceState(null, "", location.pathname + location.search);
+  });
+  cdlg.addEventListener("click", (e) => { if (e.target === cdlg) closeCreator(); });
+  async function shareCreator(cid) {
+    const c = creatorOf({ author: cid });
+    const url = `${location.origin}${location.pathname}#creator=${encodeURIComponent(cid)}`;
+    try {
+      if (navigator.share) await navigator.share({ title: `${c.name} のゲーム｜GAME WORLD`, url });
+      else { await navigator.clipboard.writeText(url); toast("リンクをコピーしました"); }
+    } catch {}
   }
   function removeURL(g) {
     const p = new URLSearchParams({ template: "remove-game.yml", title: `[削除依頼] ${g.title}`, game_id: g.id });
@@ -334,10 +479,13 @@
 
   /* ---------- player ---------- */
   const player = $("#player"), frame = $("#frame");
+  let lastPlayed = null;
   function play(id) {
     const g = GAMES.find((x) => x.id === id);
     if (!g) return;
+    lastPlayed = g.id;
     closeDetail();
+    closeCreator();
     $("#playerTitle").textContent = g.title;
     $("#newTab").href = g.url;
     $("#playerHint").hidden = !isExternal(g);
@@ -354,6 +502,12 @@
     frame.src = "about:blank";
     player.hidden = true;
     document.body.classList.remove("locked");
+    // 遊び終わったら詳細に戻り、リアクションを促す
+    if (lastPlayed && Stats.enabled) {
+      openDetail(lastPlayed);
+      const box = $("#reactBox");
+      if (box) { box.classList.add("pulse"); setTimeout(() => box.scrollIntoView({ block: "center" }), 50); }
+    }
   }
   $("#closePlayer").addEventListener("click", closePlayer);
   $("#fsBtn").addEventListener("click", () => {
@@ -384,15 +538,19 @@
 
   /* ---------- global delegation ---------- */
   document.addEventListener("click", (e) => {
-    const t = e.target.closest("[data-fav],[data-play],[data-share],[data-close],[data-open],[data-genre],[data-author],#clearAuthor");
+    const t = e.target.closest("[data-fav],[data-play],[data-share],[data-close],[data-open],[data-genre],[data-author],#clearAuthor,[data-react],[data-creator],[data-close-creator],[data-share-creator]");
     if (!t) return;
+    if (t.dataset.react) { sendReaction(t.dataset.react, t.dataset.r); return; }
+    if (t.dataset.creator) { openCreator(t.dataset.creator); return; }
+    if (t.hasAttribute("data-close-creator")) { closeCreator(); return; }
+    if (t.dataset.shareCreator) { shareCreator(t.dataset.shareCreator); return; }
     if (t.dataset.fav) { e.stopPropagation(); toggleFav(t.dataset.fav); }
     else if (t.dataset.play) play(t.dataset.play);
     else if (t.dataset.share) share(t.dataset.share);
     else if (t.hasAttribute("data-close")) closeDetail();
     else if (t.dataset.open) openDetail(t.dataset.open);
     else if (t.dataset.genre) { state.genre = t.dataset.genre; renderChips(); renderGrid(); }
-    else if (t.dataset.author) { state.author = t.dataset.author; renderGrid(); $("#games").scrollIntoView(); }
+    else if (t.dataset.author) { closeCreator(); state.author = t.dataset.author; renderGrid(); $("#games").scrollIntoView(); }
     else if (t.id === "clearAuthor") { state.author = null; renderGrid(); }
   });
   document.addEventListener("keydown", (e) => {
@@ -706,7 +864,9 @@
   /* ---------- deep link ---------- */
   function fromHash() {
     const m = location.hash.match(/^#game=(.+)$/);
-    if (m) openDetail(decodeURIComponent(m[1]));
+    if (m) return openDetail(decodeURIComponent(m[1]));
+    const c = location.hash.match(/^#creator=(.+)$/);
+    if (c) openCreator(decodeURIComponent(c[1]));
   }
   window.addEventListener("hashchange", fromHash);
 
@@ -715,6 +875,8 @@
     renderTotal();
     renderRanking();
     renderGrid();
+    refreshDetailStats();
+    if (cdlg.open) { const m = location.hash.match(/^#creator=(.+)$/); if (m) renderCreatorPage(decodeURIComponent(m[1])); }
   });
   renderHero();
   renderRanking();
@@ -725,5 +887,5 @@
   restoreDraft();
   renderPreview();
   fromHash();
-  Stats.loadAll(GAMES.map((g) => g.id));
+  Stats.loadPlays(GAMES.map((g) => g.id));
 })();
