@@ -169,6 +169,77 @@
   }
   const rankText = (id) => { const r = rankOf(id); return r ? `全 ${r.total} 本中 ${r.rank} 位` : "—"; };
 
+  /* ---------- daily history (data/stats-history.json, recorded by GitHub Actions) ---------- */
+  const History = (() => {
+    let days = []; // [{date, plays:{id:n}}] 古い順。date（日本時間）の 0 時台の累計
+    let loaded = false;
+    const DAY = 864e5;
+    const jst = (t = Date.now()) => new Date(t + 9 * 3600e3).toISOString().slice(0, 10);
+    const shift = (date, n) => jst(Date.parse(date + "T00:00:00+09:00") + n * DAY);
+    const snap = (date) => days.find((d) => d.date === date)?.plays;
+    async function load() {
+      try {
+        const r = await fetch("data/stats-history.json", { cache: "no-cache" });
+        if (r.ok) days = ((await r.json()).days || []).sort((a, b) => a.date.localeCompare(b.date));
+      } catch {}
+      loaded = true;
+    }
+    // その日のプレイ数（翌日の記録 − その日の記録。今日は現在値 − 今日の記録）
+    function dayCount(id, date) {
+      const s = snap(date);
+      if (!s) return null;
+      const base = s[id] ?? 0;
+      const next = date === jst() ? Stats.plays(id) : snap(shift(date, 1))?.[id];
+      return next == null ? null : Math.max(0, next - base);
+    }
+    function last7(id) {
+      const today = jst();
+      return Array.from({ length: 7 }, (_, i) => {
+        const date = shift(today, i - 6);
+        return { date, n: dayCount(id, date), today: date === today };
+      });
+    }
+    // 今週（直近7日）のプレイ数。記録が7日分ない間は、ある分だけで計算
+    function weekBase() {
+      const from = shift(jst(), -6);
+      return days.find((d) => d.date >= from) || null;
+    }
+    function week(id) {
+      const b = weekBase(), now = Stats.plays(id);
+      if (!b || now == null) return null;
+      return Math.max(0, now - (b.plays[id] ?? 0));
+    }
+    const weekDays = () => { const b = weekBase(); return b ? Math.round((Date.parse(jst()) - Date.parse(b.date)) / DAY) + 1 : 0; };
+    return {
+      load, last7, week, weekDays, dayCount,
+      today: (id) => dayCount(id, jst()),
+      yesterday: (id) => dayCount(id, shift(jst(), -1)),
+      has: () => days.length > 0,
+      loaded: () => loaded,
+    };
+  })();
+  const WEEKDAY = ["日", "月", "火", "水", "木", "金", "土"];
+  function trendHTML(id, { compact = false } = {}) {
+    if (!History.has()) return compact ? "" : `<p class="trend-empty">推移グラフは毎日0時の記録がたまると表示されます。</p>`;
+    const d = History.last7(id);
+    const max = Math.max(1, ...d.map((x) => x.n || 0));
+    const bars = d.map((x) => {
+      const wd = WEEKDAY[new Date(Date.parse(x.date + "T12:00:00+09:00")).getUTCDay()];
+      const h = x.n == null ? 0 : Math.max(x.n ? 8 : 2, (x.n / max) * 100);
+      return `<span class="tbar${x.today ? " is-today" : ""}${x.n == null ? " is-none" : ""}" title="${x.date.slice(5).replace("-", "/")}（${wd}）${x.n == null ? " 記録なし" : ` ${x.n}回`}">
+        ${compact ? "" : `<em>${x.n == null ? "" : x.n}</em>`}<i style="height:${h}%"></i>${compact ? "" : `<small>${x.today ? "今日" : wd}</small>`}</span>`;
+    }).join("");
+    const label = d.map((x) => `${x.date.slice(5)} ${x.n == null ? "記録なし" : x.n + "回"}`).join("、");
+    return `<div class="trend${compact ? " compact" : ""}" role="img" aria-label="7日間のプレイ数：${label}">${bars}</div>`;
+  }
+  function deltaText(id) {
+    const t = History.today(id), y = History.yesterday(id);
+    const parts = [];
+    if (t != null) parts.push(`今日 +${fmtNum(t)}`);
+    if (y != null) parts.push(`昨日 +${fmtNum(y)}`);
+    return parts.join("・");
+  }
+
   /* ---------- state ---------- */
   const state = { q: "", genre: "all", sort: "new", favOnly: false, author: null };
 
@@ -277,10 +348,17 @@
   }
 
   /* ---------- render: ranking ---------- */
+  let rankPeriod = "week";
   function renderRanking() {
     const el = $("#rankList");
     const st = Stats.status();
     if (st === "off") { $("#ranking").hidden = true; return; }
+    const weekly = rankPeriod === "week" && History.has();
+    document.querySelectorAll("[data-period]").forEach((b) => b.setAttribute("aria-pressed", b.dataset.period === (weekly ? "week" : "all")));
+    const wd = History.weekDays();
+    $("#rankSub").textContent = weekly
+      ? `直近${wd >= 7 ? "7" : wd}日間に「遊ぶ」が押された回数${wd < 7 ? `（記録 ${wd} 日分）` : ""}。同じ端末からは6時間に1回だけ数えます。`
+      : "「遊ぶ」が押された回数（累計）。同じ端末からは6時間に1回だけ数えます。";
     if (st === "idle" || (st === "loading" && !GAMES.some((g) => Stats.plays(g.id) != null))) {
       el.innerHTML = `<li class="rank-msg">集計中…</li>`;
       return;
@@ -289,28 +367,29 @@
       el.innerHTML = `<li class="rank-msg">ランキングを読み込めませんでした。時間をおいてページを再読み込みしてください。</li>`;
       return;
     }
-    const list = GAMES.filter((g) => Stats.plays(g.id) != null)
-      .sort((a, b) => Stats.plays(b.id) - Stats.plays(a.id) || b.added.localeCompare(a.added))
-      .slice(0, 5);
-    const max = Math.max(1, ...list.map((g) => Stats.plays(g.id)));
-    const none = list.every((g) => !Stats.plays(g.id));
+    const val = (g) => (weekly ? History.week(g.id) : Stats.plays(g.id));
+    const pool = GAMES.filter((g) => val(g) != null);
+    const list = pool.sort((a, b) => val(b) - val(a) || (Stats.plays(b.id) || 0) - (Stats.plays(a.id) || 0) || b.added.localeCompare(a.added)).slice(0, 5);
+    const max = Math.max(1, ...list.map(val));
+    const none = list.every((g) => !val(g));
     el.innerHTML =
-      (none ? `<li class="rank-msg">まだプレイ記録がありません。最初のプレイヤーになろう！</li>` : "") +
+      (none ? `<li class="rank-msg">${weekly ? "この期間のプレイはまだありません。" : "まだプレイ記録がありません。"}最初のプレイヤーになろう！</li>` : "") +
       list.map((g, i) => {
-        const c = creatorOf(g), n = Stats.plays(g.id);
-        const no = rankOf(g.id)?.rank ?? i + 1;
-        return `<li class="rank-item r${Math.min(no, 4)}${i === 0 ? " top" : ""}" data-open="${esc(g.id)}" tabindex="0" role="button" aria-label="${no}位 ${esc(g.title)} ${n}回">
+        const c = creatorOf(g), n = val(g);
+        const no = 1 + pool.filter((x) => val(x) > n).length;
+        return `<li class="rank-item r${Math.min(no, 4)}" data-open="${esc(g.id)}" tabindex="0" role="button" aria-label="${no}位 ${esc(g.title)} ${weekly ? "今週" : "累計"}${n}回">
           <span class="rank-no">${no}</span>
           <span class="rank-thumb" style="--c1:${esc((g.colors || [])[0] || "#ffc928")};--c2:${esc((g.colors || [])[1] || "#ff5a8f")}">${esc(g.emoji || "🎮")}</span>
           <span class="rank-main">
             <b>${esc(g.title)}</b>
-            <small>${esc(c.avatar)} ${esc(c.name)}</small>
+            <small>${esc(c.avatar)} ${esc(c.name)}${weekly ? `　累計 ${fmtNum(Stats.plays(g.id) || 0)} 回` : ""}</small>
             <span class="rank-bar"><i style="width:${(n / max) * 100}%"></i></span>
           </span>
-          <span class="rank-count">${fmtNum(n)}<small>回</small></span>
+          <span class="rank-count">${weekly ? "+" : ""}${fmtNum(n)}<small>回</small></span>
         </li>`;
       }).join("");
   }
+  document.querySelectorAll("[data-period]").forEach((b) => b.addEventListener("click", () => { rankPeriod = b.dataset.period; renderRanking(); }));
 
   /* ---------- render: creators ---------- */
   function renderCreators() {
@@ -352,6 +431,7 @@
           ${Stats.enabled ? `<div><dt>プレイ数</dt><dd id="dPlays">${Stats.plays(g.id) != null ? fmtNum(Stats.plays(g.id)) + " 回" : "—"}</dd></div>
           <div><dt>人気順位</dt><dd id="dRank">${rankText(g.id)}</dd></div>` : ""}
         </dl>
+        ${Stats.enabled ? `<div class="trend-box"><div class="trend-head"><h4>7日間のプレイ数</h4><span id="dDelta">${esc(deltaText(g.id))}</span></div><div id="dTrend">${trendHTML(g.id)}</div></div>` : ""}
         <div class="d-actions">
           <button class="btn btn-primary" type="button" data-play="${esc(g.id)}">▶ いますぐ遊ぶ</button>
           ${isExternal(g) ? `<a class="btn" href="${esc(g.url)}" target="_blank" rel="noopener">↗ 新しいタブで遊ぶ</a>` : ""}
@@ -386,6 +466,9 @@
     const p = $("#dPlays"), r = $("#dRank");
     if (p) p.textContent = Stats.plays(id) != null ? fmtNum(Stats.plays(id)) + " 回" : "—";
     if (r) r.textContent = rankText(id);
+    const t = $("#dTrend"), dd = $("#dDelta");
+    if (t) t.innerHTML = trendHTML(id);
+    if (dd) dd.textContent = deltaText(id);
   }
   async function sendReaction(id, r) {
     const ok = await Stats.react(id, r);
@@ -412,6 +495,7 @@
     const reacts = games.reduce((a, g) => a + Stats.reactions(g.id), 0);
     const best = games.map((g) => rankOf(g.id)?.rank).filter(Boolean).sort((a, b) => a - b)[0];
     const loaded = Stats.status() === "ready";
+    const weekSum = History.has() ? games.reduce((a, g) => a + (History.week(g.id) || 0), 0) : null;
     const tile = (label, val) => `<div><dt>${label}</dt><dd>${val}</dd></div>`;
     $("#creatorBody").innerHTML = `
       <button class="icon-btn x" type="button" data-close-creator aria-label="閉じる">✕</button>
@@ -426,7 +510,7 @@
       </div>
       <dl class="cp-stats">
         ${tile("作品", games.length)}
-        ${Stats.enabled ? tile("合計プレイ", loaded ? fmtNum(plays) : "…") + tile("リアクション", fmtNum(reacts)) + tile("最高順位", best ? `${best} 位` : "—") : ""}
+        ${Stats.enabled ? tile("合計プレイ", loaded ? fmtNum(plays) : "…") + (weekSum != null ? tile("今週のプレイ", loaded ? `+${fmtNum(weekSum)}` : "…") : "") + tile("リアクション", fmtNum(reacts)) + tile("最高順位", best ? `${best} 位` : "—") : ""}
       </dl>
       <ol class="cp-games">
         ${games.map((g) => {
@@ -441,12 +525,13 @@
                 <span>${REACTIONS.map(([k, e]) => `${e} ${Stats.reaction(g.id, k) ?? "–"}`).join("　")}</span>` : ""}
                 <span>📅 ${fmtDate(g.added)}</span>
               </p>
+              ${Stats.enabled && History.has() ? `<div class="cp-trend">${trendHTML(g.id, { compact: true })}<span>${esc(deltaText(g.id)) || "今日 —"}</span></div>` : ""}
             </div>
             <button class="btn btn-sm btn-primary" type="button" data-play="${esc(g.id)}">▶ 遊ぶ</button>
           </li>`;
         }).join("") || `<li class="rank-msg">まだ作品がありません</li>`}
       </ol>
-      <p class="cp-note">プレイ数・順位・リアクションは数分ごとに更新されます。プレイ数は同じ端末から6時間に1回、リアクションは1端末につき各1回まで数えます。</p>
+      <p class="cp-note">グラフは直近7日間の1日ごとのプレイ数（毎日0時に記録、今日の分はリアルタイム）。プレイ数・順位・リアクションは数分ごとに更新されます。プレイ数は同じ端末から6時間に1回、リアクションは1端末につき各1回まで数えます。</p>
       <div class="cp-actions">
         <button class="btn" type="button" data-share-creator="${esc(cid)}">🔗 このページを共有</button>
         <button class="btn" type="button" data-author="${esc(cid)}">一覧でこの人の作品を見る</button>
@@ -888,4 +973,10 @@
   renderPreview();
   fromHash();
   Stats.loadPlays(GAMES.map((g) => g.id));
+  History.load().then(() => {
+    if (!History.has()) rankPeriod = "all";
+    renderRanking();
+    refreshDetailStats();
+    if (cdlg.open) { const m = location.hash.match(/^#creator=(.+)$/); if (m) renderCreatorPage(decodeURIComponent(m[1])); }
+  });
 })();

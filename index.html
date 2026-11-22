@@ -60,7 +60,11 @@
     <div class="wrap">
       <div class="sec-head">
         <h2><span class="tag-num">🏆</span>人気ランキング</h2>
-        <p class="sec-sub">「遊ぶ」が押された回数（累計）。同じ端末からは6時間に1回だけ数えます。</p>
+        <p class="sec-sub" id="rankSub">「遊ぶ」が押された回数。同じ端末からは6時間に1回だけ数えます。</p>
+      </div>
+      <div class="rank-tabs" role="tablist" aria-label="ランキングの期間">
+        <button class="chip" type="button" role="tab" data-period="week" aria-pressed="true">今週</button>
+        <button class="chip" type="button" role="tab" data-period="all" aria-pressed="false">累計</button>
       </div>
       <ol class="ranking" id="rankList" aria-live="polite"></ol>
     </div>
