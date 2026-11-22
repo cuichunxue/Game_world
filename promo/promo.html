@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=1080, initial-scale=1">
+<title>GAME WORLD 宣伝動画</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<style>
+/* 1080x1920 の縦型動画。ステッカー調（太い黒フチ＋ベタ影）でサイトと世界観を揃える。URL・ドメインは一切表示しない */
+:root{
+  --cream:#fff6e4; --tint:#ffe9c2; --ink:#2b1d14; --pink:#ff5a8f; --yolk:#ffc928; --mint:#3fcf9f; --sky:#4d9bff; --card:#fffdf7;
+  --display:'Dela Gothic One','Hiragino Sans','Yu Gothic','IPAGothic',sans-serif;
+  --body:'M PLUS Rounded 1c','Hiragino Maru Gothic ProN','IPAGothic',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:1080px;height:1920px;overflow:hidden;background:var(--cream);font-family:var(--body);font-weight:800;color:var(--ink)}
+#stage{position:relative;width:1080px;height:1920px;overflow:hidden;
+  background:
+    radial-gradient(circle at 12% 14%,rgba(255,201,40,.35) 0 260px,transparent 261px),
+    radial-gradient(circle at 92% 88%,rgba(255,90,143,.25) 0 340px,transparent 341px),
+    repeating-linear-gradient(-45deg,transparent 0 44px,rgba(43,29,20,.035) 44px 48px),
+    var(--cream)}
+.scene{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:0 70px;opacity:0;visibility:hidden}
+.scene.on{visibility:visible;opacity:1}
+.scene.out{animation:sceneOut .35s ease-in forwards}
+@keyframes sceneOut{to{opacity:0;transform:scale(.97)}}
+
+/* アニメーション部品：.on の間だけ --d 秒遅れで再生 */
+.a{opacity:0}
+.on .a{animation:pop .55s cubic-bezier(.3,1.6,.55,1) both;animation-delay:var(--d,0s)}
+.on .slide{animation:slide .6s cubic-bezier(.2,.9,.3,1) both;animation-delay:var(--d,0s)}
+.on .fade{animation:fade .5s ease-out both;animation-delay:var(--d,0s)}
+@keyframes pop{from{opacity:0;transform:scale(.4) rotate(-6deg)}to{opacity:1;transform:none}}
+@keyframes slide{from{opacity:0;transform:translateY(120px)}to{opacity:1;transform:none}}
+@keyframes fade{from{opacity:0}to{opacity:1}}
+
+.big{font-family:var(--display);font-weight:400;line-height:1.3;text-align:center;letter-spacing:.01em}
+.sticker{background:var(--card);border:8px solid var(--ink);border-radius:36px;box-shadow:0 14px 0 var(--ink)}
+.tag{display:inline-block;padding:10px 30px;background:var(--ink);color:var(--cream);border-radius:999px;font-size:34px;letter-spacing:.18em}
+
+/* 1: フック */
+#s1 .l1{font-size:92px}
+#s1 .l2{font-size:112px;color:var(--pink);-webkit-text-stroke:5px var(--ink);paint-order:stroke fill;text-shadow:8px 8px 0 var(--ink);margin-top:20px}
+#s1 .emoji{font-size:260px;margin-top:60px;animation:none}
+.on#s1 .emoji{animation:pop .55s cubic-bezier(.3,1.6,.55,1) both,sway 1.4s ease-in-out 1s infinite alternate;animation-delay:1.2s,1.8s}
+@keyframes sway{from{transform:rotate(-8deg) translateY(0)}to{transform:rotate(8deg) translateY(16px)}}
+#s1 .sub{font-size:48px;margin-top:50px;color:#6f5a48}
+
+/* 2: ロゴ */
+.logo-mark{display:grid;place-items:center;width:300px;height:300px;background:var(--yolk);border:12px solid var(--ink);border-radius:80px;box-shadow:0 20px 0 var(--ink);font-size:170px;transform:rotate(-8deg)}
+#s2 .name{font-size:112px;margin-top:70px;line-height:1.1;white-space:nowrap}
+#s2 .name b{font-weight:400;color:var(--pink)}
+#s2 .copy{font-size:64px;margin-top:40px}
+#s2 .desc{font-size:44px;margin-top:30px;color:#6f5a48;text-align:center;line-height:1.6}
+
+/* 3: ゲームカード */
+.h2{font-size:78px;margin-bottom:60px}
+.cards{display:flex;flex-direction:column;gap:46px;width:100%}
+.gcard{display:flex;align-items:center;gap:36px;padding:30px 36px}
+.gthumb{display:grid;place-items:center;flex:0 0 190px;height:190px;border:7px solid var(--ink);border-radius:30px;font-size:110px}
+.gcard h3{font-family:var(--display);font-weight:400;font-size:46px;line-height:1.25}
+.gcard p{font-size:34px;color:#6f5a48;margin-top:8px}
+.chips{display:flex;gap:12px;margin-top:14px;flex-wrap:wrap}
+.chips span{padding:4px 18px;background:var(--tint);border-radius:12px;font-size:28px}
+.newb{position:absolute;margin:-80px 0 0 -40px;padding:6px 22px;background:var(--yolk);border:6px solid var(--ink);border-radius:16px;font:400 32px/1.2 var(--display);transform:rotate(-8deg)}
+#s3 .foot{margin-top:56px;font-size:56px;font-family:var(--display);font-weight:400;text-align:center;line-height:1.4}
+#s3 .foot em{font-style:normal;color:var(--pink)}
+
+/* 4: ランキング */
+.rank{width:100%;display:flex;flex-direction:column;gap:34px}
+.ritem{display:grid;grid-template-columns:100px 150px 1fr;align-items:center;gap:26px;padding:26px 34px}
+.rno{display:grid;place-items:center;width:100px;height:100px;border:7px solid var(--ink);border-radius:50%;font:400 54px/1 var(--display)}
+.r1 .rno{background:var(--yolk)}.r2 .rno{background:#d9dde3}.r3 .rno{background:#e7a46a}
+.rthumb{display:grid;place-items:center;width:150px;height:150px;border:6px solid var(--ink);border-radius:26px;font-size:84px}
+.rmain b{display:block;font:400 42px/1.25 var(--display)}
+.rbar{position:relative;height:30px;margin-top:16px;background:var(--tint);border-radius:999px;overflow:hidden}
+.rbar i{display:block;height:100%;width:0;background:var(--pink);border-radius:999px;transition:width 1.4s cubic-bezier(.2,.8,.2,1)}
+.rcount{margin-top:10px;font:400 40px/1 var(--display);color:var(--pink)}
+.rcount small{font:800 28px/1 var(--body);color:#6f5a48;margin-left:6px}
+.toggle{display:flex;gap:16px;margin-bottom:40px}
+.toggle span{padding:12px 40px;border:6px solid var(--ink);border-radius:999px;font-size:40px;background:var(--card)}
+.toggle span.act{background:var(--ink);color:var(--cream)}
+#s4 .foot{margin-top:50px;font-size:46px;color:#6f5a48;text-align:center;line-height:1.6}
+
+/* 5: 登録3ステップ */
+.steps{width:100%;display:flex;flex-direction:column;gap:50px}
+.step{position:relative;display:flex;align-items:center;gap:36px;padding:44px 40px}
+.sn{position:absolute;left:-18px;top:-34px;display:grid;place-items:center;width:84px;height:84px;border:7px solid var(--ink);border-radius:24px;color:#fff;font:400 48px/1 var(--display);transform:rotate(-8deg)}
+.sico{font-size:120px;flex:0 0 150px;text-align:center}
+.step h3{font-family:var(--display);font-weight:400;font-size:52px;line-height:1.25}
+.step p{font-size:36px;color:#6f5a48;margin-top:8px;line-height:1.5}
+#s5 .foot{margin-top:56px;display:flex;gap:18px;flex-wrap:wrap;justify-content:center}
+#s5 .foot span{padding:12px 34px;background:var(--yolk);border:6px solid var(--ink);border-radius:999px;font-size:42px;box-shadow:0 8px 0 var(--ink)}
+
+/* 6: クリエイターページ */
+.cpanel{width:100%;padding:44px 44px 50px}
+.cp-top{display:flex;align-items:center;gap:30px}
+.cp-ava{display:grid;place-items:center;width:130px;height:130px;background:var(--yolk);border:7px solid var(--ink);border-radius:50%;font-size:70px}
+.cp-top h3{font:400 56px/1.2 var(--display)}
+.cp-top p{font-size:34px;color:#6f5a48}
+.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:18px;margin-top:40px}
+.tiles div{padding:20px 22px;background:var(--tint);border-radius:22px}
+.tiles dt{font-size:28px;color:#6f5a48}
+.tiles dd{font:400 54px/1.2 var(--display)}
+.chart{display:grid;grid-template-columns:repeat(7,1fr);gap:16px;align-items:end;height:280px;margin-top:44px}
+.chart i{display:block;height:0;background:var(--sky);border:6px solid var(--ink);border-radius:14px 14px 4px 4px;transition:height .9s cubic-bezier(.2,.9,.3,1)}
+.chart i:last-child{background:var(--pink)}
+.cap{display:flex;justify-content:space-between;margin-top:14px;font-size:30px;color:#6f5a48}
+.cap b{color:var(--pink)}
+.reacts{display:flex;gap:22px;margin-top:44px}
+.reacts div{flex:1;display:flex;flex-direction:column;align-items:center;padding:22px 0 18px;background:var(--card);border:6px solid var(--ink);border-radius:26px;box-shadow:0 8px 0 var(--ink)}
+.reacts .e{font-size:84px;line-height:1.1}
+.reacts b{font:400 46px/1.2 var(--display)}
+#s6 .h2{margin-bottom:46px}
+#s6 .foot{margin-top:50px;font-size:54px;font-family:var(--display);font-weight:400;text-align:center;line-height:1.45}
+#s6 .foot em{font-style:normal;color:var(--pink)}
+
+/* 7: CTA */
+#s7{background:var(--ink);color:var(--cream)}
+#s7 .logo-mark{width:230px;height:230px;font-size:130px;border-radius:64px}
+#s7 .cta1{font-size:92px;margin-top:70px;line-height:1.35}
+#s7 .cta1 em{font-style:normal;color:var(--yolk)}
+#s7 .btn{margin-top:70px;padding:44px 90px;background:var(--pink);color:#fff;border:10px solid var(--cream);border-radius:36px;box-shadow:0 16px 0 #000;font:400 78px/1.2 var(--display)}
+.on#s7 .btn{animation:pop .55s cubic-bezier(.3,1.6,.55,1) both,beat 1s ease-in-out 1.5s infinite;animation-delay:1.3s,1.9s}
+@keyframes beat{50%{transform:scale(1.06)}}
+#s7 .tagline{margin-top:80px;font-size:50px;letter-spacing:.14em;color:var(--yolk)}
+#s7 .wm{margin-top:24px;font:400 64px/1 var(--display)}
+#s7 .wm b{font-weight:400;color:var(--pink)}
+#scene-bg7{position:absolute;inset:0;background:var(--ink);opacity:0}
+.confetti{position:absolute;top:-80px;font-size:70px;opacity:0;z-index:0}
+#s7>:not(.confetti){position:relative;z-index:1}
+.on .confetti{animation:fall 3.2s linear both;animation-delay:var(--d)}
+@keyframes fall{0%{opacity:1;transform:translateY(0) rotate(0)}100%{opacity:1;transform:translateY(2100px) rotate(540deg)}}
+
+/* 進行バー（装飾） */
+#prog{position:absolute;left:0;bottom:0;height:14px;width:0;background:var(--pink);z-index:9}
+</style>
+</head>
+<body>
+<div id="stage">
+
+  <!-- 1 フック -->
+  <section class="scene" id="s1">
+    <p class="big l1 a" style="--d:.1s">ゲーム、作ったのに</p>
+    <p class="big l2 a" style="--d:.9s">誰にも遊んで<br>もらえない…？</p>
+    <div class="emoji a" style="--d:1.6s">😢</div>
+    <p class="big sub fade" style="--d:2.4s;font-weight:800;font-family:var(--body)">そんなあなたに</p>
+  </section>
+
+  <!-- 2 ロゴ -->
+  <section class="scene" id="s2">
+    <div class="logo-mark a" style="--d:.1s">🎮</div>
+    <p class="big name a" style="--d:.5s">GAME<b>WORLD</b></p>
+    <p class="big copy a" style="--d:1s">みんなのゲーム広場</p>
+    <p class="desc slide" style="--d:1.6s">個人開発者がつくった<br>ちょっとヘンなミニゲームが集まる場所</p>
+  </section>
+
+  <!-- 3 ゲーム一覧 -->
+  <section class="scene" id="s3">
+    <p class="big h2 a" style="--d:0s">ブラウザで<span style="color:var(--pink)">すぐ遊べる</span></p>
+    <div class="cards">
+      <div class="sticker gcard slide" style="--d:.3s"><div class="gthumb" style="background:linear-gradient(135deg,#ff4d6d,#3a0ca3)">⏱️</div>
+        <div><h3>30 SECOND<br>PANIC KING</h3><p>30秒を信じろ。外したら地獄。</p><div class="chips"><span>タイミング</span><span>パーティー</span></div></div></div>
+      <div class="sticker gcard slide" style="--d:.8s"><div class="gthumb" style="background:linear-gradient(135deg,#ffc928,#7cc24a)">🥚</div>
+        <div><h3>Golden Egg<br>Chase King</h3><p>牧場で金のタマゴを集めまくれ！</p><div class="chips"><span>アクション</span><span>カジュアル</span></div></div></div>
+      <div class="sticker gcard slide" style="--d:1.3s"><div class="gthumb" style="background:linear-gradient(135deg,#ff5a8f,#2d1838)">🕯️</div>
+        <div><h3>Fart Candle<br>King</h3><p>おならでロウソクを吹き消せ。</p><div class="chips"><span>おバカ</span><span>3か国語</span></div></div></div>
+    </div>
+    <p class="foot fade" style="--d:2.2s">登録なし・ダウンロードなし<br><em>タップして、すぐプレイ</em></p>
+  </section>
+
+  <!-- 4 ランキング -->
+  <section class="scene" id="s4">
+    <p class="big h2 a" style="--d:0s">🏆 人気ランキング</p>
+    <div class="toggle fade" style="--d:.3s"><span class="act">今週</span><span>累計</span></div>
+    <div class="rank">
+      <div class="sticker ritem r1 slide" style="--d:.5s"><span class="rno">1</span><span class="rthumb" style="background:linear-gradient(135deg,#ff4d6d,#3a0ca3)">⏱️</span>
+        <div class="rmain"><b>30 SECOND PANIC KING</b><div class="rbar"><i data-w="100"></i></div><div class="rcount">+<span data-count="248">0</span><small>回</small></div></div></div>
+      <div class="sticker ritem r2 slide" style="--d:.9s"><span class="rno">2</span><span class="rthumb" style="background:linear-gradient(135deg,#ffc928,#7cc24a)">🥚</span>
+        <div class="rmain"><b>Golden Egg Chase King</b><div class="rbar"><i data-w="72"></i></div><div class="rcount">+<span data-count="179">0</span><small>回</small></div></div></div>
+      <div class="sticker ritem r3 slide" style="--d:1.3s"><span class="rno">3</span><span class="rthumb" style="background:linear-gradient(135deg,#ff5a8f,#2d1838)">🕯️</span>
+        <div class="rmain"><b>Fart Candle King</b><div class="rbar"><i data-w="41"></i></div><div class="rcount">+<span data-count="102">0</span><small>回</small></div></div></div>
+    </div>
+    <p class="foot fade" style="--d:2.4s">新作も、伸びてる作品も<br>ちゃんと上位に入れる</p>
+  </section>
+
+  <!-- 5 登録 -->
+  <section class="scene" id="s5">
+    <p class="big h2 a" style="--d:0s">あなたのゲームも<br><span style="color:var(--pink)">3ステップ</span>で公開</p>
+    <div class="steps">
+      <div class="sticker step slide" style="--d:.4s"><span class="sn" style="background:var(--pink)">1</span><span class="sico">📝</span><div><h3>フォームに入力</h3><p>ゲーム名と説明を書くだけ。<br>カードのプレビューつき</p></div></div>
+      <div class="sticker step slide" style="--d:1s"><span class="sn" style="background:var(--sky)">2</span><span class="sico">📮</span><div><h3>送信する</h3><p>画面の案内どおりに<br>ボタンを押すだけ</p></div></div>
+      <div class="sticker step slide" style="--d:1.6s"><span class="sn" style="background:var(--mint)">3</span><span class="sico">🎉</span><div><h3>確認して公開！</h3><p>自動チェックのあと<br>管理者が確認します</p></div></div>
+    </div>
+    <div class="foot"><span class="a" style="--d:2.3s">公開済みのゲームでもOK</span><span class="a" style="--d:2.6s">ファイルでもOK</span><span class="a" style="--d:2.9s">無料</span></div>
+  </section>
+
+  <!-- 6 クリエイターページ -->
+  <section class="scene" id="s6">
+    <p class="big h2 a" style="--d:0s">📈 反応が<span style="color:var(--pink)">見える</span></p>
+    <div class="sticker cpanel slide" style="--d:.3s">
+      <div class="cp-top"><span class="cp-ava">👑</span><div><h3>あなたのページ</h3><p>作品ごとのプレイ数・順位・反応</p></div></div>
+      <dl class="tiles">
+        <div><dt>合計プレイ</dt><dd><span data-count="1286">0</span></dd></div>
+        <div><dt>今週</dt><dd>+<span data-count="529">0</span></dd></div>
+        <div><dt>最高順位</dt><dd><span data-count="1">0</span> 位</dd></div>
+      </dl>
+      <div class="chart" id="chart"><i data-h="30"></i><i data-h="44"></i><i data-h="38"></i><i data-h="62"></i><i data-h="55"></i><i data-h="82"></i><i data-h="100"></i></div>
+      <div class="cap"><span>7日間のプレイ数</span><b>今日 +86・昨日 +71</b></div>
+      <div class="reacts"><div><span class="e">😂</span><b data-count="64">0</b></div><div><span class="e">🔥</span><b data-count="38">0</b></div><div><span class="e">👍</span><b data-count="91">0</b></div></div>
+    </div>
+    <p class="foot fade" style="--d:2.6s">100プレイ達成は<br><em>GitHub の通知</em>でお知らせ！</p>
+  </section>
+
+  <!-- 7 CTA -->
+  <section class="scene" id="s7">
+    <span class="confetti" style="left:8%;--d:.2s">🎊</span><span class="confetti" style="left:24%;--d:.9s">⭐</span><span class="confetti" style="left:42%;--d:.4s">🎮</span>
+    <span class="confetti" style="left:60%;--d:1.2s">🎉</span><span class="confetti" style="left:78%;--d:.6s">⭐</span><span class="confetti" style="left:90%;--d:1.5s">🎊</span>
+    <div class="logo-mark a" style="--d:.1s">🎮</div>
+    <p class="big cta1 a" style="--d:.5s">あなたのゲームも<br><em>ここに並べよう</em></p>
+    <div class="btn">＋ ゲームを登録</div>
+    <p class="big tagline fade" style="--d:2.2s">INDIE MINI GAME HUB</p>
+    <p class="wm fade" style="--d:2.4s">GAME<b>WORLD</b></p>
+  </section>
+
+  <div id="prog"></div>
+</div>
+
+<script>
+// シーン（秒）。合計 TOTAL 秒で終了
+const SCENES = [["s1", 0, 4.2], ["s2", 4.2, 8.6], ["s3", 8.6, 15], ["s4", 15, 21.2], ["s5", 21.2, 27.4], ["s6", 27.4, 34.4], ["s7", 34.4, 40]];
+window.TOTAL = 40;
+const $ = (s) => document.querySelector(s);
+function count(el, to, ms) {
+  const t0 = performance.now();
+  (function f(now) {
+    const k = Math.min(1, (now - t0) / ms), e = 1 - Math.pow(1 - k, 3);
+    el.textContent = Math.round(to * e).toLocaleString("ja-JP");
+    if (k < 1) requestAnimationFrame(f);
+  })(t0);
+}
+function enter(id) {
+  const s = document.getElementById(id);
+  s.classList.remove("out");
+  s.classList.add("on");
+  s.querySelectorAll("[data-w]").forEach((i) => setTimeout(() => (i.style.width = i.dataset.w + "%"), 900));
+  s.querySelectorAll("[data-count]").forEach((c) => setTimeout(() => count(c, +c.dataset.count, 1400), id === "s4" ? 900 : 800));
+  s.querySelectorAll("[data-h]").forEach((b, n) => setTimeout(() => (b.style.height = b.dataset.h + "%"), 900 + n * 110));
+}
+function leave(id) {
+  const s = document.getElementById(id);
+  s.classList.add("out");
+  setTimeout(() => s.classList.remove("on", "out"), 380);
+}
+window.start = function () {
+  const t0 = performance.now();
+  SCENES.forEach(([id, a, b], i) => {
+    setTimeout(() => enter(id), a * 1000);
+    if (i < SCENES.length - 1) setTimeout(() => leave(id), b * 1000 - 380);
+  });
+  (function tick(now) {
+    const k = Math.min(1, (now - t0) / (TOTAL * 1000));
+    $("#prog").style.width = k * 100 + "%";
+    if (k < 1) requestAnimationFrame(tick);
+  })(t0);
+};
+</script>
+</body>
+</html>
