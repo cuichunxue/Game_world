@@ -20,6 +20,11 @@
  * thumb     : （任意）画像サムネイルのパス。指定すると emoji より優先
  */
 
+// サイト設定：登録フォームの送信先リポジトリ（owner/repo）
+window.SITE = {
+  repo: "cuichunxue/Game_world",
+};
+
 window.GENRES = {
   action:  { label: "アクション", emoji: "⚡" },
   casual:  { label: "カジュアル", emoji: "🎈" },

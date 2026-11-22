@@ -11,26 +11,59 @@
 - 詳細モーダル（スペック・おすすめ作品・共有リンク `#game=<id>`）
 - サイト内プレイヤー（iframe・全画面・別タブで開く）
 - クリエイター一覧（クリックでその人の作品だけ表示）
-- 投稿ガイドと登録データのジェネレーター
+- **サイトからゲームを登録**（URL または HTML / zip ファイル）→ GitHub Issue → 自動チェック → 管理者承認で自動公開
 - ライト／ダークモード、スマホ対応
 
 ## ファイル構成
 
 ```
 index.html        サイト本体
-games.js          ゲーム・クリエイター・ジャンルのデータ  ← 投稿時に編集するのはここ
+games.js          運営が手で管理するゲーム・クリエイター・ジャンル・サイト設定
+community.js      サイトから登録・承認されたゲーム（GitHub Actions が自動更新）
+assets/vendor/    JSZip（ブラウザで HTML を zip にする）
+scripts/game_submission.py           登録内容の検証・公開処理
+.github/ISSUE_TEMPLATE/submit-game.yml  登録用 Issue フォーム
+.github/workflows/game-submission.yml   自動チェック・自動公開
 assets/style.css  デザイン
 assets/app.js     動作
 games/<id>/       各ゲーム（index.html）
 ```
 
-## ゲームを投稿する
+## ゲームを登録する（利用者向け）
+
+1. サイトの「＋ 登録」を開き、**URL** か **ファイル（HTML / zip）** を選んでフォームに入力
+2. 「GitHub で送信する」→ 入力済みの GitHub Issue 画面が開くので **Create** を押す
+   - ファイルの場合は、自動で保存された zip を「ゲームファイル」欄にドラッグ＆ドロップ
+   - HTML 1枚のゲームはサイトが自動で zip にします。画像・音声がある場合は `index.html` を含むフォルダごと zip に
+3. 数十秒で自動チェック結果がコメントされます（NG なら Issue を編集すると再チェック）
+4. 管理者が承認すると自動でサイトに追加され、Issue がクローズされます
+
+※ 送信には無料の GitHub アカウントが必要です。
+
+## 審査と公開（管理者向け）
+
+- 自動チェック OK のコメントが付いた Issue を確認し、**`approved` ラベルを付ける** と公開されます
+  - URL 登録 → `community.js` に追加
+  - ファイル登録 → zip を検証して `games/<ID>/` に展開し、`community.js` に追加
+- ラベルを付けられるのはトリアージ権限以上の人だけです
+- 公開をやめる場合は `community.js` から該当エントリを、ファイル登録なら `games/<ID>/` も削除してください
+- 自動チェックの内容：ID の形式・重複、必須項目、https の URL、zip のサイズ（20MB / 展開後 50MB）、ファイル数（500）、
+  `index.html` の有無、不正なパス・シンボリックリンク・許可されていない拡張子
+
+### 初期設定
+
+1. このブランチをリポジトリの **デフォルトブランチ** にマージする（Issue テンプレートとワークフローはデフォルトブランチのものが使われます）
+2. Settings → Pages でデフォルトブランチの `/ (root)` を公開
+3. Settings → General → Features で **Issues** を有効にする
+4. 送信先を変える場合は `games.js` の `SITE.repo` を編集
+5. ラベル `game-submission` / `approved` は初回の登録時に自動で作られます
+
+## Pull Request で直接追加する（上級者向け）
 
 1. このリポジトリを Fork する
 2. `games/<ゲームID>/index.html` にゲームを置く（外部で公開済みなら URL だけでも可）
-3. `games.js` の `GAMES` 配列に 1 件追加する（サイト下部のジェネレーターでコードを作れます）
-4. 初めての投稿なら `CREATORS` に自分のプロフィールを追加する
-5. Pull Request を送る
+3. `games.js` の `GAMES` 配列に 1 件追加し、初投稿なら `CREATORS` にプロフィールを追加
+4. Pull Request を送る
 
 ```js
 {
@@ -47,7 +80,6 @@ games/<id>/       各ゲーム（index.html）
   added: "2026-11-22",
   emoji: "🚀",                  // サムネイル
   colors: ["#4d9bff", "#ff5a8f"],
-  // thumb: "games/my-awesome-game/thumb.png"  // 画像サムネを使う場合
 },
 ```
 

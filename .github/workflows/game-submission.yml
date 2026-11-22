@@ -1,0 +1,97 @@
+name: Game submission
+
+on:
+  issues:
+    types: [opened, edited, labeled]
+
+jobs:
+  validate:
+    if: >
+      (github.event.action == 'opened' || github.event.action == 'edited') &&
+      github.event.issue.state == 'open' &&
+      startsWith(github.event.issue.title, '[ゲーム登録]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ensure labels
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh label create game-submission --color FFC928 --description "サイトからのゲーム登録" --force -R "$GITHUB_REPOSITORY"
+          gh label create approved --color 3FCF9F --description "管理者承認：付けると自動公開" --force -R "$GITHUB_REPOSITORY"
+          gh issue edit "${{ github.event.issue.number }}" --add-label game-submission -R "$GITHUB_REPOSITORY"
+      - name: Validate
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/game_submission.py validate "$RUNNER_TEMP/comment.md"
+      - name: Comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n="${{ github.event.issue.number }}"
+          if [ "${{ github.event.action }}" = "edited" ]; then
+            gh issue comment "$n" --edit-last --body-file "$RUNNER_TEMP/comment.md" -R "$GITHUB_REPOSITORY" \
+              || gh issue comment "$n" --body-file "$RUNNER_TEMP/comment.md" -R "$GITHUB_REPOSITORY"
+          else
+            gh issue comment "$n" --body-file "$RUNNER_TEMP/comment.md" -R "$GITHUB_REPOSITORY"
+          fi
+
+  publish:
+    # approved ラベルはトリアージ権限以上の人しか付けられない
+    if: >
+      github.event.action == 'labeled' &&
+      github.event.label.name == 'approved' &&
+      github.event.issue.state == 'open' &&
+      startsWith(github.event.issue.title, '[ゲーム登録]')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish and commit
+        id: pub
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          ISSUE_NO: ${{ github.event.issue.number }}
+          BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # 同時に承認された場合に備え、最新を取り直して最大4回やり直す
+          id=""; pushed=""
+          for i in 1 2 3 4; do
+            git fetch -q origin "$BRANCH"
+            git reset -q --hard "origin/$BRANCH"
+            git clean -fdq games
+            : > "$GITHUB_OUTPUT.tmp"
+            GITHUB_OUTPUT="$GITHUB_OUTPUT.tmp" python3 scripts/game_submission.py publish "$RUNNER_TEMP/comment.md"
+            ok=$(grep -oP '^ok=\K.*' "$GITHUB_OUTPUT.tmp" || echo false)
+            id=$(grep -oP '^game_id=\K.*' "$GITHUB_OUTPUT.tmp" || true)
+            if [ "$ok" != "true" ]; then break; fi
+            git add community.js
+            if [ -d "games/$id" ]; then git add "games/$id"; fi
+            git commit -qm "Add game: $id (#$ISSUE_NO)"
+            if git push -q origin "HEAD:$BRANCH"; then pushed=true; break; fi
+            ok=false
+            sleep $((i * 5))
+          done
+          if [ "$ok" = "true" ] && [ "${pushed:-}" != "true" ]; then ok=false; fi
+          if [ "$ok" != "true" ] && [ -n "$id" ] && [ "${pushed:-}" != "true" ] && ! grep -q '❌' "$RUNNER_TEMP/comment.md"; then
+            printf '### ⚠️ 公開に失敗しました\n\nリポジトリへの書き込みに失敗しました。`approved` ラベルを付け直して再実行してください。\n' > "$RUNNER_TEMP/comment.md"
+          fi
+          echo "ok=$ok" >> "$GITHUB_OUTPUT"
+      - name: Comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          n="${{ github.event.issue.number }}"
+          gh issue comment "$n" --body-file "$RUNNER_TEMP/comment.md" -R "$GITHUB_REPOSITORY"
+          if [ "${{ steps.pub.outputs.ok }}" = "true" ]; then
+            gh issue close "$n" --reason completed -R "$GITHUB_REPOSITORY"
+          else
+            gh issue edit "$n" --remove-label approved -R "$GITHUB_REPOSITORY"
+          fi

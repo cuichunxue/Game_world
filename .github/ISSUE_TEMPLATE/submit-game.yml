@@ -1,0 +1,136 @@
+name: 🎮 ゲームを登録する
+description: GAME WORLD にあなたのゲームを登録します（サイトの「ゲームを登録」フォームから開くと自動入力されます）
+title: "[ゲーム登録] "
+labels: ["game-submission"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## ゲーム登録フォーム
+        送信すると自動チェックが走り、結果がコメントされます。管理者が確認して `approved` ラベルを付けると、サイトに自動で公開されます。
+        **ファイルで登録する場合**は、下の「ゲームファイル」欄に **zip ファイル** をドラッグ＆ドロップしてください（中に `index.html` が必要です）。
+
+  - type: input
+    id: game_id
+    attributes:
+      label: ゲームID
+      description: 半角英小文字・数字・ハイフン（URL に使われます）
+      placeholder: my-awesome-game
+    validations:
+      required: true
+
+  - type: input
+    id: game_title
+    attributes:
+      label: ゲーム名
+    validations:
+      required: true
+
+  - type: input
+    id: catch
+    attributes:
+      label: キャッチコピー
+      description: 60文字以内
+    validations:
+      required: true
+
+  - type: textarea
+    id: desc
+    attributes:
+      label: 説明文
+      description: どんなゲーム？ 遊び方は？（600文字以内）
+    validations:
+      required: true
+
+  - type: dropdown
+    id: source
+    attributes:
+      label: 登録方法
+      options:
+        - URL
+        - ファイル
+    validations:
+      required: true
+
+  - type: input
+    id: game_url
+    attributes:
+      label: ゲームURL
+      description: 「URL」を選んだ場合のみ（https:// から始まる URL）
+      placeholder: https://example.github.io/my-game/
+
+  - type: textarea
+    id: game_file
+    attributes:
+      label: ゲームファイル
+      description: 「ファイル」を選んだ場合のみ。zip（20MB まで、中に index.html）をここにドラッグ＆ドロップ
+      placeholder: ここに zip をドロップ
+
+  - type: input
+    id: genres
+    attributes:
+      label: ジャンル
+      description: "カンマ区切り: action, casual, timing, party, puzzle, comedy"
+      placeholder: casual, comedy
+    validations:
+      required: true
+
+  - type: input
+    id: minutes
+    attributes:
+      label: プレイ時間（分）
+      placeholder: "1"
+
+  - type: input
+    id: devices
+    attributes:
+      label: 対応端末
+      description: "カンマ区切り: pc, mobile"
+      placeholder: pc, mobile
+
+  - type: input
+    id: langs
+    attributes:
+      label: 対応言語
+      placeholder: 日本語, English
+
+  - type: input
+    id: emoji
+    attributes:
+      label: サムネ絵文字
+      placeholder: 🚀
+
+  - type: input
+    id: colors
+    attributes:
+      label: サムネ色
+      description: "2色をカンマ区切り（#rrggbb）"
+      placeholder: "#4d9bff, #ff5a8f"
+
+  - type: input
+    id: creator_name
+    attributes:
+      label: クリエイター表示名
+      description: 空欄なら GitHub ユーザー名
+
+  - type: input
+    id: creator_avatar
+    attributes:
+      label: アバター絵文字
+      placeholder: 😎
+
+  - type: textarea
+    id: creator_bio
+    attributes:
+      label: 自己紹介
+      description: 120文字以内（初回登録時のみ反映）
+
+  - type: checkboxes
+    id: agree
+    attributes:
+      label: 投稿ルール
+      options:
+        - label: ブラウザだけで動き、不正な通信や個人情報の収集をしません
+          required: true
+        - label: 自分が権利を持つ（または利用許諾のある）素材だけを使っています
+          required: true

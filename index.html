@@ -25,7 +25,7 @@
     <nav class="nav" aria-label="メイン">
       <a href="#games">ゲーム</a>
       <a href="#creators">クリエイター</a>
-      <a href="#submit">投稿する</a>
+      <a href="#submit" class="nav-cta">＋ 登録</a>
     </nav>
     <button class="icon-btn" id="themeBtn" type="button" aria-label="ライト／ダーク切り替え">🌓</button>
   </div>
@@ -42,6 +42,7 @@
         <div class="hero-cta">
           <a class="btn btn-primary" href="#games">ゲームで遊ぶ ▶</a>
           <button class="btn" id="randomBtn" type="button">🎲 ランダムで1本</button>
+          <a class="btn btn-yolk" href="#submit">＋ ゲームを登録</a>
         </div>
         <dl class="stats">
           <div><dt>ゲーム</dt><dd id="statGames">0</dd></div>
@@ -102,48 +103,111 @@
   <section class="section" id="submit">
     <div class="wrap">
       <div class="sec-head">
-        <h2><span class="tag-num">03</span>あなたのゲームを投稿しよう</h2>
-        <p class="sec-sub">HTML 1枚で動くゲームなら、3ステップで公開できます。</p>
+        <h2><span class="tag-num">03</span>あなたのゲームを登録しよう</h2>
+        <p class="sec-sub">URL でも、ゲームファイルでも OK。管理者の確認後にサイトに並びます。</p>
       </div>
       <ol class="steps">
         <li>
           <span class="step-n">1</span>
-          <h3>ゲームを置く</h3>
-          <p>リポジトリを Fork して <code>games/&lt;ゲームID&gt;/index.html</code> にゲームを置きます。自分のサイトで公開済みなら URL だけでも OK。</p>
+          <h3>フォームに入力</h3>
+          <p>公開済みのゲームなら <b>URL</b>、まだなら <b>HTML / zip ファイル</b> を選んで、ゲームの情報を入力します。</p>
         </li>
         <li>
           <span class="step-n">2</span>
-          <h3>カタログに登録</h3>
-          <p><code>games.js</code> の <code>GAMES</code> に1件追加。初投稿なら <code>CREATORS</code> に自己紹介も。下のジェネレーターが便利です。</p>
+          <h3>GitHub で送信</h3>
+          <p>入力内容が入った GitHub の画面が開くので、送信ボタンを押すだけ。ファイルの場合は zip をドラッグ＆ドロップ。</p>
         </li>
         <li>
           <span class="step-n">3</span>
-          <h3>Pull Request</h3>
-          <p>PR を送ってマージされたら公開完了！ GitHub Pages で自動的にサイトに並びます。</p>
+          <h3>確認して公開</h3>
+          <p>自動チェックの結果がすぐ届きます。管理者が承認すると、数分でサイトに公開されます。</p>
         </li>
       </ol>
 
-      <div class="gen card-box">
-        <h3>📝 登録データ ジェネレーター</h3>
-        <form class="gen-form" id="genForm">
-          <label>ゲームID<input name="id" placeholder="my-awesome-game" pattern="[a-z0-9\-]+" required></label>
-          <label>ゲーム名<input name="title" placeholder="My Awesome Game" required></label>
-          <label>作者ID（GitHub名）<input name="author" placeholder="your-github-id" required></label>
-          <label>サムネ絵文字<input name="emoji" placeholder="🚀" maxlength="4"></label>
-          <label class="full">キャッチコピー<input name="catch" placeholder="ひとことで魅力を！"></label>
-          <label class="full">説明文<textarea name="desc" rows="3" placeholder="どんなゲーム？ 遊び方は？"></textarea></label>
-          <label>ゲームURL<input name="url" placeholder="games/my-awesome-game/index.html"></label>
-          <label>プレイ時間（分）<input name="minutes" type="number" min="1" value="1"></label>
-          <fieldset class="full">
-            <legend>ジャンル</legend>
-            <div class="gen-genres" id="genGenres"></div>
+      <div class="reg">
+        <form class="reg-form card-box" id="regForm" novalidate>
+          <h3>🎮 ゲーム登録フォーム</h3>
+
+          <fieldset class="seg" role="radiogroup" aria-label="登録方法">
+            <label><input type="radio" name="source" value="url" checked><span>🔗 URL で登録</span></label>
+            <label><input type="radio" name="source" value="file"><span>📦 ファイルで登録</span></label>
           </fieldset>
+
+          <div class="src-panel" data-src="url">
+            <label><span>ゲームURL <em>必須</em></span>
+              <input name="url" type="url" inputmode="url" placeholder="https://your-name.github.io/my-game/">
+            </label>
+            <p class="hint">GitHub Pages・itch.io・自分のサイトなど、https で公開されている URL。</p>
+          </div>
+
+          <div class="src-panel" data-src="file" hidden>
+            <label class="drop" id="drop">
+              <input type="file" id="fileInput" accept=".html,.htm,.zip,text/html,application/zip">
+              <span class="drop-ico">📦</span>
+              <span class="drop-main">HTML または zip をここにドロップ</span>
+              <span class="drop-sub">またはクリックして選択（20MB まで）</span>
+            </label>
+            <div class="file-status" id="fileStatus" hidden></div>
+            <p class="hint">HTML 1枚のゲームはそのまま選べば自動で zip にします。画像や音声がある場合は、<code>index.html</code> を含むフォルダごと zip にしてください。</p>
+          </div>
+
+          <div class="row2">
+            <label><span>ゲーム名 <em>必須</em></span><input name="title" maxlength="60" placeholder="My Awesome Game"></label>
+            <label><span>ゲームID <em>必須</em></span><input name="id" maxlength="40" placeholder="my-awesome-game" autocapitalize="off" spellcheck="false"></label>
+          </div>
+          <label><span>キャッチコピー <em>必須</em></span><input name="catch" maxlength="60" placeholder="ひとことで魅力を！"></label>
+          <label><span>説明文 <em>必須</em></span><textarea name="desc" rows="3" maxlength="600" placeholder="どんなゲーム？ 遊び方は？"></textarea></label>
+
+          <fieldset>
+            <legend>ジャンル <em>必須</em></legend>
+            <div class="pills" id="regGenres"></div>
+          </fieldset>
+
+          <div class="row3">
+            <label>プレイ時間（分）<input name="minutes" type="number" min="1" max="120" value="1"></label>
+            <fieldset>
+              <legend>対応端末</legend>
+              <div class="pills">
+                <label><input type="checkbox" name="devices" value="pc" checked>💻 PC</label>
+                <label><input type="checkbox" name="devices" value="mobile" checked>📱 スマホ</label>
+              </div>
+            </fieldset>
+            <label>対応言語<input name="langs" value="日本語" placeholder="日本語, English"></label>
+          </div>
+
+          <div class="row3">
+            <label>サムネ絵文字<input name="emoji" maxlength="8" placeholder="🚀"></label>
+            <label>サムネ色 1<input name="c1" type="color" value="#4d9bff"></label>
+            <label>サムネ色 2<input name="c2" type="color" value="#ff5a8f"></label>
+          </div>
+
+          <details class="more">
+            <summary>クリエイター情報（任意・初回のみ反映）</summary>
+            <div class="row2">
+              <label>表示名<input name="creator_name" maxlength="30" placeholder="空欄なら GitHub ユーザー名"></label>
+              <label>アバター絵文字<input name="creator_avatar" maxlength="8" placeholder="😎"></label>
+            </div>
+            <label>自己紹介<textarea name="creator_bio" rows="2" maxlength="120" placeholder="どんなゲームを作っていますか？"></textarea></label>
+          </details>
+
+          <label class="agree"><input type="checkbox" name="agree"> ブラウザだけで動き、不正な通信をせず、自分が権利を持つ素材だけを使っています</label>
+
+          <div class="form-errors" id="formErrors" role="alert" hidden></div>
+          <button class="btn btn-primary btn-wide" type="submit">GitHub で送信する ↗</button>
+          <p class="hint center">※ 送信には無料の GitHub アカウントが必要です</p>
         </form>
-        <div class="code-wrap">
-          <pre><code id="genOut"></code></pre>
-          <button class="btn btn-sm" id="copyBtn" type="button">コピー</button>
-        </div>
+
+        <aside class="reg-side">
+          <p class="side-label">プレビュー</p>
+          <div id="regPreview" class="reg-preview"></div>
+          <div class="next card-box" id="nextSteps" hidden></div>
+        </aside>
       </div>
+
+      <details class="advanced">
+        <summary>上級者向け：Pull Request で直接追加する</summary>
+        <p>リポジトリを Fork し、<code>games/&lt;ゲームID&gt;/</code> にゲームを置いて <code>games.js</code> の <code>GAMES</code> に1件追加し、Pull Request を送ってください。詳しくは README を参照。</p>
+      </details>
     </div>
   </section>
 </main>
@@ -179,6 +243,7 @@
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
 <script src="games.js"></script>
+<script src="community.js"></script>
 <script src="assets/app.js"></script>
 </body>
 </html>

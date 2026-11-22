@@ -1,9 +1,11 @@
 (() => {
   "use strict";
 
-  const GAMES = window.GAMES || [];
+  const COMMUNITY = window.COMMUNITY || { games: [], creators: {} };
+  const GAMES = [...(window.GAMES || []), ...(COMMUNITY.games || [])];
   const GENRES = window.GENRES || {};
-  const CREATORS = window.CREATORS || {};
+  const CREATORS = { ...(COMMUNITY.creators || {}), ...(window.CREATORS || {}) };
+  const REPO = (window.SITE && window.SITE.repo) || "";
   const $ = (s, r = document) => r.querySelector(s);
   const NEW_DAYS = 30;
 
@@ -281,37 +283,216 @@
     store.set("gw:theme", root.dataset.theme);
   });
 
-  /* ---------- submission generator ---------- */
-  const form = $("#genForm");
-  $("#genGenres").innerHTML = Object.entries(GENRES)
+  /* ---------- registration form ---------- */
+  const reg = $("#regForm");
+  const ID_RE = /^[a-z0-9](?:[a-z0-9-]{1,38}[a-z0-9])$/;
+  const MAX_ZIP = 20 * 1024 * 1024;
+  let upload = null; // { zipBlob, zipName, converted, ok }
+
+  $("#regGenres").innerHTML = Object.entries(GENRES)
     .map(([k, v]) => `<label><input type="checkbox" name="genres" value="${k}">${v.emoji} ${esc(v.label)}</label>`).join("");
-  function genOutput() {
-    const fd = new FormData(form);
-    const id = (fd.get("id") || "my-awesome-game").toString().trim();
-    const today = new Date().toISOString().slice(0, 10);
-    const entry = {
-      id,
-      title: fd.get("title") || "My Awesome Game",
-      catch: fd.get("catch") || "ひとことで魅力を！",
-      desc: fd.get("desc") || "どんなゲーム？ 遊び方は？",
-      author: fd.get("author") || "your-github-id",
-      url: fd.get("url") || `games/${id}/index.html`,
-      genres: fd.getAll("genres").length ? fd.getAll("genres") : ["casual"],
-      devices: ["pc", "mobile"],
-      minutes: Number(fd.get("minutes")) || 1,
-      langs: ["日本語"],
-      added: today,
-      emoji: fd.get("emoji") || "🎮",
-      colors: ["#4d9bff", "#ff5a8f"],
+
+  const source = () => reg.querySelector("[name=source]:checked").value;
+  const val = (n) => (reg.elements[n]?.value || "").trim();
+  const slugify = (t) => t.toLowerCase().normalize("NFKD").replace(/[^\w\s-]/g, "").replace(/[\s_]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "").slice(0, 40);
+
+  let idTouched = false;
+  reg.elements.id.addEventListener("input", () => { idTouched = true; });
+  reg.elements.title.addEventListener("input", () => {
+    if (!idTouched) reg.elements.id.value = slugify(val("title"));
+  });
+
+  function regEntry() {
+    const fd = new FormData(reg);
+    return {
+      id: val("id").toLowerCase(),
+      title: val("title") || "ゲーム名",
+      catch: val("catch") || "キャッチコピーがここに入ります",
+      desc: val("desc"),
+      author: "__you__",
+      url: "#",
+      genres: fd.getAll("genres"),
+      devices: fd.getAll("devices"),
+      minutes: Number(val("minutes")) || 1,
+      langs: val("langs").split(/[,、\s]+/).filter(Boolean),
+      added: new Date().toISOString().slice(0, 10),
+      emoji: val("emoji") || "🎮",
+      colors: [val("c1"), val("c2")],
     };
-    const json = JSON.stringify(entry, null, 2).replace(/"(\w+)":/g, "$1:");
-    $("#genOut").textContent = `// games.js の GAMES 配列に追加\n${json},`;
   }
-  form.addEventListener("input", genOutput);
-  form.addEventListener("submit", (e) => e.preventDefault());
-  $("#copyBtn").addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText($("#genOut").textContent); toast("コピーしました！"); }
-    catch { toast("コピーできませんでした"); }
+
+  function renderPreview() {
+    const g = regEntry();
+    CREATORS.__you__ = { name: val("creator_name") || "あなた", avatar: val("creator_avatar") || "🙂", color: val("c1") };
+    $("#regPreview").innerHTML = cardHTML(g).replace(/data-open="[^"]*"|data-fav="[^"]*"|tabindex="0"|role="button"/g, "");
+    delete CREATORS.__you__;
+  }
+
+  reg.querySelectorAll("[name=source]").forEach((r) =>
+    r.addEventListener("change", () => {
+      reg.querySelectorAll(".src-panel").forEach((p) => (p.hidden = p.dataset.src !== source()));
+    })
+  );
+
+  /* file handling */
+  let jszipPromise = null;
+  function loadJSZip() {
+    if (window.JSZip) return Promise.resolve(window.JSZip);
+    jszipPromise ||= new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "assets/vendor/jszip.min.js";
+      s.onload = () => res(window.JSZip);
+      s.onerror = () => { jszipPromise = null; rej(new Error("JSZip load failed")); };
+      document.head.appendChild(s);
+    });
+    return jszipPromise;
+  }
+  const kb = (n) => (n > 1048576 ? (n / 1048576).toFixed(1) + " MB" : Math.max(1, Math.round(n / 1024)) + " KB");
+  function fileStatus(cls, html) {
+    const el = $("#fileStatus");
+    el.hidden = false;
+    el.className = "file-status " + cls;
+    el.innerHTML = html;
+  }
+
+  async function handleFile(file) {
+    upload = null;
+    if (!file) return;
+    const name = file.name.toLowerCase();
+    if (file.size > MAX_ZIP) return fileStatus("ng", `❌ ${esc(file.name)} は 20MB を超えています`);
+    fileStatus("", "⏳ チェック中…");
+    try {
+      const JSZip = await loadJSZip();
+      const base = (val("id") || slugify(file.name.replace(/\.[^.]+$/, "")) || "my-game");
+      if (name.endsWith(".html") || name.endsWith(".htm")) {
+        const zip = new JSZip();
+        zip.file("index.html", file);
+        const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
+        upload = { zipBlob: blob, zipName: `${base}.zip`, converted: true, ok: true };
+        fileStatus("ok", `✅ ${esc(file.name)}（${kb(file.size)}）<small>送信時に <b>${esc(upload.zipName)}</b> として zip に変換して保存します</small>`);
+      } else if (name.endsWith(".zip")) {
+        const zip = await JSZip.loadAsync(file);
+        const files = Object.values(zip.files).filter((f) => !f.dir && !f.name.startsWith("__MACOSX/"));
+        const names = files.map((f) => f.name);
+        const tops = new Set(names.map((n) => n.split("/")[0]));
+        const hasIndex = names.includes("index.html") || (tops.size === 1 && names.includes(`${[...tops][0]}/index.html`));
+        if (!hasIndex) {
+          return fileStatus("ng", `❌ zip の中に <code>index.html</code> が見つかりません<small>一番上か、フォルダ1つの直下に置いてください</small>`);
+        }
+        upload = { zipBlob: file, zipName: file.name, converted: false, ok: true };
+        fileStatus("ok", `✅ ${esc(file.name)}（${kb(file.size)}・${files.length} ファイル）<small>index.html を確認しました</small>`);
+      } else {
+        fileStatus("ng", "❌ HTML か zip ファイルを選んでください");
+      }
+    } catch (e) {
+      fileStatus("ng", "❌ ファイルを読み込めませんでした（zip が壊れているか、通信エラーです）");
+    }
+  }
+  const fileInput = $("#fileInput"), drop = $("#drop");
+  fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+  ["dragenter", "dragover"].forEach((ev) => drop.addEventListener(ev, (e) => { e.preventDefault(); drop.classList.add("over"); }));
+  ["dragleave", "drop"].forEach((ev) => drop.addEventListener(ev, () => drop.classList.remove("over")));
+  drop.addEventListener("drop", (e) => {
+    e.preventDefault();
+    const f = e.dataTransfer.files[0];
+    if (f) handleFile(f);
+  });
+
+  /* validation */
+  function validateReg() {
+    const errs = [];
+    const mark = (n, bad) => reg.elements[n]?.setAttribute("aria-invalid", bad ? "true" : "false");
+    const id = val("id").toLowerCase();
+    const idBad = !ID_RE.test(id) || GAMES.some((g) => g.id === id);
+    mark("id", idBad);
+    if (!ID_RE.test(id)) errs.push("ゲームID は半角英小文字・数字・ハイフンで 3〜40 文字にしてください");
+    else if (GAMES.some((g) => g.id === id)) errs.push(`ゲームID「${id}」はすでに使われています`);
+    for (const [n, label] of [["title", "ゲーム名"], ["catch", "キャッチコピー"], ["desc", "説明文"]]) {
+      mark(n, !val(n));
+      if (!val(n)) errs.push(`${label}を入力してください`);
+    }
+    if (source() === "url") {
+      const bad = !/^https:\/\/[^\s"'<>]+$/.test(val("url"));
+      mark("url", bad);
+      if (bad) errs.push("ゲームURL は https:// から始まる URL を入力してください");
+    } else if (!upload?.ok) errs.push("HTML または zip ファイルを選んでください");
+    if (!new FormData(reg).getAll("genres").length) errs.push("ジャンルを1つ以上選んでください");
+    if (!reg.elements.agree.checked) errs.push("投稿ルールへの同意にチェックしてください");
+    return errs;
+  }
+
+  function issueURL() {
+    const fd = new FormData(reg);
+    const p = new URLSearchParams({
+      template: "submit-game.yml",
+      title: `[ゲーム登録] ${val("title")}`,
+      game_id: val("id").toLowerCase(),
+      game_title: val("title"),
+    });
+    const fields = {
+      catch: val("catch"),
+      desc: val("desc"),
+      source: source() === "url" ? "URL" : "ファイル",
+      game_url: source() === "url" ? val("url") : "",
+      genres: fd.getAll("genres").join(", "),
+      minutes: String(Number(val("minutes")) || 1),
+      devices: fd.getAll("devices").join(", "),
+      langs: val("langs"),
+      emoji: val("emoji"),
+      colors: `${val("c1")}, ${val("c2")}`,
+      creator_name: val("creator_name"),
+      creator_avatar: val("creator_avatar"),
+      creator_bio: val("creator_bio"),
+    };
+    for (const [k, v] of Object.entries(fields)) if (v) p.set(k, v);
+    return `https://github.com/${REPO}/issues/new?${p.toString()}`;
+  }
+
+  function saveBlob(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = name;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+  }
+
+  function showNext(url) {
+    const isFile = source() === "file";
+    const box = $("#nextSteps");
+    box.hidden = false;
+    box.innerHTML = `
+      <h4>📮 あと少しで送信完了！</h4>
+      <ol>
+        <li>新しいタブで GitHub の登録画面が開きました（入力内容は自動で入っています）</li>
+        ${isFile ? `<li><b>${esc(upload.zipName)}</b> を「ゲームファイル」欄にドラッグ＆ドロップ${upload.converted ? "（ダウンロードフォルダに保存しました）" : ""}</li>` : ""}
+        <li>ルールにチェックして <b>Create</b> を押す</li>
+        <li>数十秒で自動チェックの結果がコメントされます</li>
+      </ol>
+      <a class="btn btn-primary" href="${esc(url)}" target="_blank" rel="noopener">GitHub の画面をもう一度開く ↗</a>
+      ${isFile && upload.converted ? `<button class="btn" type="button" id="dlAgain">⬇ zip をもう一度保存</button>` : ""}`;
+    $("#dlAgain")?.addEventListener("click", () => saveBlob(upload.zipBlob, upload.zipName));
+    box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
+  reg.addEventListener("input", renderPreview);
+  reg.addEventListener("change", renderPreview);
+  reg.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const errs = validateReg();
+    const box = $("#formErrors");
+    if (errs.length) {
+      box.hidden = false;
+      box.innerHTML = `入力内容を確認してください<ul>${errs.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>`;
+      box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return;
+    }
+    box.hidden = true;
+    if (!REPO) return toast("送信先リポジトリが設定されていません");
+    const url = issueURL();
+    if (source() === "file" && upload.converted) saveBlob(upload.zipBlob, upload.zipName);
+    window.open(url, "_blank", "noopener");
+    showNext(url);
   });
 
   /* ---------- deep link ---------- */
@@ -326,6 +507,6 @@
   renderChips();
   renderGrid();
   renderCreators();
-  genOutput();
+  renderPreview();
   fromHash();
 })();
