@@ -1,5 +1,5 @@
 {
- "updated": "2026-11-27T08:43+09:00",
+ "updated": "2026-11-28T08:22+09:00",
  "days": [
   {
    "date": "2026-11-22",
@@ -53,6 +53,16 @@
   },
   {
    "date": "2026-11-27",
+   "plays": {
+    "30-second-panic-king": 0,
+    "golden-egg-chase-king": 0,
+    "fart-candle-king": 0,
+    "draw-roll-king": 0,
+    "draw-roll-king2": 0
+   }
+  },
+  {
+   "date": "2026-11-28",
    "plays": {
     "30-second-panic-king": 0,
     "golden-egg-chase-king": 0,
